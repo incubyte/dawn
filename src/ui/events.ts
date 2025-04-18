@@ -6,6 +6,7 @@ import { createAudioFileService } from '../services/audio-file-service';
 import { createTrackService } from '../services/track-service';
 import { showLoadingIndicator, hideLoadingIndicator, showErrorNotification } from './components/loading';
 import { AudioEngine } from '../core/audio-engine';
+import { updateTrackWidth, centerViewOnTime } from '../utils/scroll-sync';
 
 export function setupEventHandlers(
   audioContext: AudioContext,
@@ -120,6 +121,12 @@ export function setupEventHandlers(
           };
           
           addClipToTrack(trackId, clip);
+          
+          // Update track width to accommodate the new clip
+          updateTrackWidth();
+          
+          // Center view on the new clip
+          centerViewOnTime(clip.startTime + (clip.duration / 2), pixelsPerSecond);
         } catch (error) {
           console.error(`Error loading audio file ${file.name}:`, error);
           showErrorNotification(`Failed to load "${file.name}": ${error instanceof Error ? error.message : String(error)}`);
@@ -401,6 +408,12 @@ export function setupEventHandlers(
           
           console.log(`Adding clip to track ${trackId} at ${startTime}s`);
           addClipToTrack(trackId, clip);
+          
+          // Update track width to accommodate the new clip
+          updateTrackWidth();
+          
+          // Center view on the new clip
+          centerViewOnTime(clip.startTime + (clip.duration / 2), pixelsPerSecond);
         } catch (error) {
           console.error(`Error loading audio file ${file.name}:`, error);
           showErrorNotification(`Failed to load "${file.name}": ${error instanceof Error ? error.message : String(error)}`);

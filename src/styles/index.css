@@ -131,6 +131,7 @@ body {
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  position: relative;  /* Added for absolute positioning of scrollbar sync */
 }
 
 /* Timeline */
@@ -142,12 +143,20 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
   user-select: none;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.timeline::-webkit-scrollbar {
+  display: none;
 }
 
 .timeline-ruler {
   position: relative;
   height: 100%;
   min-width: 100%;
+  width: 5000px; /* Default width that can be dynamically updated in JS */
 }
 
 .timeline-marker {
@@ -253,6 +262,16 @@ body {
 
 .tracks-container {
   flex: 1;
+  overflow-y: auto;
+  overflow-x: scroll; /* Allow horizontal scrolling */
+  position: relative;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.tracks-container::-webkit-scrollbar {
+  display: none;
 }
 
 /* Track */
@@ -260,6 +279,8 @@ body {
   display: flex;
   border-bottom: 1px solid var(--border-color);
   height: 80px;
+  min-width: max-content; /* Ensure track expands to contain all clips */
+  position: relative;
 }
 
 .track-header {
@@ -276,8 +297,9 @@ body {
   flex: 1;
   background-color: var(--track-bg);
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* Allow content to be visible beyond the container bounds */
   transition: background-color 0.2s;
+  width: 5000px; /* Match the timeline ruler width - will be dynamically updated */
 }
 
 .track-controls {
@@ -351,6 +373,8 @@ body {
   overflow: hidden;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   transition: transform 0.1s, box-shadow 0.1s;
+  max-width: 10000px; /* Ensure clips can be very wide */
+  z-index: 5; /* Ensure clips appear above track background */
 }
 
 .audio-clip:hover {

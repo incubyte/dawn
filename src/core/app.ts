@@ -5,6 +5,7 @@ import { createTimeline, updateTimelineCursor } from '../ui/components/timeline'
 import { setupEventHandlers } from '../ui/events';
 import { formatTime } from '../utils/time-formatter';
 import { setupAudioDebug } from '../utils/audio-debug';
+import { setupScrollSync, updateTrackWidth } from '../utils/scroll-sync';
 
 export function initializeApp(): void {
   // Initialize audio engine first
@@ -54,6 +55,12 @@ export function initializeApp(): void {
   
   // Set up audio debugging tools
   setupAudioDebug(audioEngine);
+  
+  // Set up synchronized scrolling between timeline and tracks
+  setupScrollSync();
+  
+  // Initialize track width
+  updateTrackWidth();
   
   // Expose the audio engine globally for debugging
   (window as any).audioEngine = audioEngine;

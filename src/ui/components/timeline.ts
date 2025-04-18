@@ -58,11 +58,29 @@ export function updateTimelineCursor(time: number, pixelsPerSecond: number): voi
     const timelineRect = timeline.getBoundingClientRect();
     const cursorPosition = position;
     
-    // Check if cursor is outside the visible area
-    if (cursorPosition < timeline.scrollLeft || 
-        cursorPosition > timeline.scrollLeft + timelineRect.width) {
+    // Calculate visible area boundaries
+    const leftBoundary = timeline.scrollLeft + 50; // Add some padding
+    const rightBoundary = timeline.scrollLeft + timelineRect.width - 50; // Add some padding
+    
+    // Check if cursor is outside the visible area or close to the edge
+    if (cursorPosition < leftBoundary || cursorPosition > rightBoundary) {
       // Scroll to keep cursor centered
-      timeline.scrollLeft = cursorPosition - (timelineRect.width / 2);
+      const tracksContainer = document.querySelector('.tracks-container');
+      const newScrollPosition = cursorPosition - (timelineRect.width / 2);
+      
+      // Smooth scrolling
+      timeline.scrollTo({
+        left: newScrollPosition,
+        behavior: 'smooth'
+      });
+      
+      // Synchronize tracks container scroll with timeline
+      if (tracksContainer) {
+        (tracksContainer as HTMLElement).scrollTo({
+          left: newScrollPosition,
+          behavior: 'smooth'
+        });
+      }
     }
   }
 }
@@ -128,7 +146,10 @@ function generateTimeMarkers(
         
         // Dispatch event to notify about zoom change
         const zoomEvent = new CustomEvent('timeline:zoom', {
-          detail: { pixelsPerSecond: newPixelsPerSecond }
+          detail: { 
+            pixelsPerSecond: newPixelsPerSecond,
+            totalDuration
+          }
         });
         document.dispatchEvent(zoomEvent);
       });
@@ -146,7 +167,10 @@ function generateTimeMarkers(
         
         // Dispatch event to notify about zoom change
         const zoomEvent = new CustomEvent('timeline:zoom', {
-          detail: { pixelsPerSecond: newPixelsPerSecond }
+          detail: { 
+            pixelsPerSecond: newPixelsPerSecond,
+            totalDuration
+          }
         });
         document.dispatchEvent(zoomEvent);
       });
