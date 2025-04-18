@@ -14,7 +14,44 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   // Create the clip content
   const labelElement = document.createElement('div');
   labelElement.classList.add('clip-label');
-  labelElement.textContent = clip.name;
+  
+  // Add clip name and action buttons in a layout
+  const clipNameSpan = document.createElement('span');
+  clipNameSpan.classList.add('clip-name');
+  clipNameSpan.textContent = clip.name;
+  clipNameSpan.title = clip.name; // For longer names that might be truncated
+  
+  const actionsDiv = document.createElement('div');
+  actionsDiv.classList.add('clip-actions');
+  
+  // Create delete button
+  const deleteButton = document.createElement('button');
+  deleteButton.classList.add('clip-delete-btn');
+  deleteButton.innerHTML = '✕';
+  deleteButton.title = 'Delete clip';
+  deleteButton.setAttribute('aria-label', 'Delete clip');
+  
+  // Prevent click event from bubbling to avoid selecting the clip when clicking delete
+  deleteButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    
+    // Dispatch a custom event for deleting the clip
+    const deleteEvent = new CustomEvent('clip:delete', {
+      bubbles: true,
+      detail: {
+        clipId: clip.id,
+        trackElement: clipElement.closest('.track'),
+        clipElement: clipElement
+      }
+    });
+    
+    clipElement.dispatchEvent(deleteEvent);
+  });
+  
+  // Add elements to the label
+  actionsDiv.appendChild(deleteButton);
+  labelElement.appendChild(clipNameSpan);
+  labelElement.appendChild(actionsDiv);
   
   const waveformElement = document.createElement('div');
   waveformElement.classList.add('clip-waveform');
@@ -30,6 +67,45 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   
   // Make clip draggable
   clipElement.draggable = true;
+  
+  // Make clip selectable - but within its own event handler
+  clipElement.addEventListener('click', (e) => {
+    // Don't handle clicks on action buttons
+    if ((e.target as HTMLElement).closest('.clip-actions')) {
+      return;
+    }
+    
+    // Toggle selection state
+    const isAlreadySelected = clipElement.classList.contains('selected');
+    
+    // Clear any other selected clips first
+    document.querySelectorAll('.audio-clip.selected').forEach(selectedClip => {
+      if (selectedClip !== clipElement) {
+        selectedClip.classList.remove('selected');
+      }
+    });
+    
+    // If it wasn't already selected, select it now
+    if (!isAlreadySelected) {
+      clipElement.classList.add('selected');
+    } else {
+      // If it was already selected, deselect it
+      clipElement.classList.remove('selected');
+    }
+    
+    // Dispatch an event for clip selection
+    const selectEvent = new CustomEvent('clip:select', {
+      bubbles: true,
+      detail: {
+        clipId: clip.id,
+        trackElement: clipElement.closest('.track'),
+        clipElement: clipElement,
+        selected: !isAlreadySelected
+      }
+    });
+    
+    clipElement.dispatchEvent(selectEvent);
+  });
   
   return clipElement;
 }

@@ -62,6 +62,9 @@ export function setupEventHandlers(
   const tracksContainer = document.getElementById('tracks-container');
   const timelineCursor = document.querySelector('.timeline-cursor');
   
+  // Set up keyboard shortcuts
+  setupKeyboardShortcuts();
+  
   // Transport controls - only apply these if we don't have a reference to the AudioEngine
   // (otherwise, they're handled by transport.ts)
   if (!audioEngine) {
@@ -347,6 +350,53 @@ export function setupEventHandlers(
     setupTrackDropZone(trackElement.querySelector('.track-clips'));
   }
   
+  // Global variable to track selected clip
+  let selectedClipId: string | null = null;
+  
+  // Function to remove a clip
+  function removeClip(trackId: string, clipId: string) {
+    console.log(`Removing clip ${clipId} from track ${trackId}`);
+    
+    // Remove from the track service data model
+    trackService.removeClipFromTrack(trackId, clipId);
+    
+    // Remove from the UI
+    const clipElement = document.querySelector(`[data-clip-id="${clipId}"]`);
+    if (clipElement) {
+      clipElement.remove();
+    }
+    
+    // Clear selection if this was the selected clip
+    if (selectedClipId === clipId) {
+      selectedClipId = null;
+    }
+    
+    // Update the track width after removing a clip
+    updateTrackWidth();
+  }
+  
+  // Function to handle keyboard shortcuts
+  function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Only handle if we have a selected clip
+      if (selectedClipId) {
+        // Delete key (Delete or Backspace) to remove the selected clip
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`);
+          if (clipElement) {
+            const trackElement = clipElement.closest('.track');
+            if (trackElement) {
+              const trackId = trackElement.getAttribute('data-track-id');
+              if (trackId) {
+                removeClip(trackId, selectedClipId);
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+  
   // Function to add a clip to a track
   function addClipToTrack(trackId: string, clip: AudioClip) {
     console.log(`Adding clip "${clip.name}" to track ${trackId} (using trackService instance: ${audioEngine?.trackService === trackService ? 'FROM_AUDIO_ENGINE' : 'LOCAL'})`);
@@ -388,12 +438,35 @@ export function setupEventHandlers(
       target.classList.remove('dragging');
     });
     
+    // Handle clip selection
+    clipElement.addEventListener('clip:select', (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { clipId, selected } = customEvent.detail;
+      
+      // Update the selected clip ID
+      selectedClipId = selected ? clipId : null;
+      console.log(`Clip ${clipId} ${selected ? 'selected' : 'deselected'}`);
+    });
+    
+    // Handle clip deletion
+    clipElement.addEventListener('clip:delete', (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { clipId } = customEvent.detail;
+      
+      removeClip(trackId, clipId);
+    });
+    
     // Add click-and-drag for repositioning clips
     let isDragging = false;
     let startX = 0;
     let originalLeft = 0;
     
     clipElement.addEventListener('mousedown', (e) => {
+      // Don't start dragging if we clicked on a button or action element
+      if ((e.target as HTMLElement).closest('.clip-actions')) {
+        return;
+      }
+      
       isDragging = true;
       startX = e.clientX;
       originalLeft = parseInt(clipElement.style.left || '0', 10);

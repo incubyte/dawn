@@ -20,9 +20,14 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
     <div class="time-display">
       <span id="current-time">00:00:000</span>
     </div>
-    <button id="export-button" class="transport-button" title="Export">
-      Export
-    </button>
+    <div class="transport-buttons">
+      <button id="delete-clip-button" class="transport-button" title="Delete Selected Clip">
+        <span class="icon">🗑️</span>
+      </button>
+      <button id="export-button" class="transport-button" title="Export">
+        Export
+      </button>
+    </div>
   `;
 
   // Set up event handlers
@@ -38,6 +43,7 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   const playButton = document.getElementById('play-button');
   const pauseButton = document.getElementById('pause-button');
   const stopButton = document.getElementById('stop-button');
+  const deleteClipButton = document.getElementById('delete-clip-button');
   const exportButton = document.getElementById('export-button');
   
   if (playButton && audioEngine) {
@@ -106,6 +112,39 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         }
       } catch (error) {
         console.error('Error stopping playback:', error);
+      }
+    });
+  }
+  
+  // Delete clip button
+  if (deleteClipButton) {
+    deleteClipButton.addEventListener('click', () => {
+      console.log('Delete clip button clicked');
+      
+      // Find the currently selected clip
+      const selectedClip = document.querySelector('.audio-clip.selected');
+      if (selectedClip) {
+        const clipId = selectedClip.getAttribute('data-clip-id');
+        const trackElement = selectedClip.closest('.track');
+        
+        if (clipId && trackElement) {
+          const trackId = trackElement.getAttribute('data-track-id');
+          if (trackId) {
+            // Dispatch a custom event for deleting the clip
+            const deleteEvent = new CustomEvent('clip:delete', {
+              bubbles: true,
+              detail: {
+                clipId,
+                trackElement,
+                clipElement: selectedClip
+              }
+            });
+            
+            selectedClip.dispatchEvent(deleteEvent);
+          }
+        }
+      } else {
+        console.log('No clip selected to delete');
       }
     });
   }

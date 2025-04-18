@@ -82,11 +82,30 @@ body {
   align-items: center;
   justify-content: center;
   min-width: 2.5rem;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, transform 0.1s;
 }
 
 .transport-button:hover {
   background-color: var(--button-hover);
+}
+
+.transport-button:active {
+  transform: scale(0.95);
+}
+
+#delete-clip-button {
+  background-color: var(--secondary-color);
+  color: #e74c3c;
+}
+
+#delete-clip-button:hover {
+  background-color: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+}
+
+#delete-clip-button:active {
+  background-color: rgba(231, 76, 60, 0.4);
+  transform: scale(0.95);
 }
 
 #play-button:hover {
@@ -464,13 +483,21 @@ body {
   cursor: move;
   overflow: hidden;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.1s, box-shadow 0.1s, border 0.2s;
   max-width: 10000px; /* Ensure clips can be very wide */
   z-index: 5; /* Ensure clips appear above track background */
+  border: 2px solid transparent;
+  user-select: none;
 }
 
 .audio-clip:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.audio-clip.selected {
+  border: 2px solid #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  z-index: 6; /* Selected clips should appear above other clips */
 }
 
 .audio-clip.dragging {
@@ -486,6 +513,41 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   background-color: rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.clip-actions {
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.audio-clip:hover .clip-actions,
+.audio-clip.selected .clip-actions {
+  opacity: 1;
+}
+
+.clip-delete-btn {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.clip-delete-btn:hover {
+  background-color: rgba(231, 76, 60, 0.3);
 }
 
 .clip-waveform {
