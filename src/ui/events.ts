@@ -794,158 +794,370 @@ export function setupEventHandlers(
   function removeClip(trackId: string, clipId: string) {
     console.log(`Removing clip ${clipId} from track ${trackId}`);
     
-    // Remove from the track service data model
-    trackService.removeClipFromTrack(trackId, clipId);
-    
-    // Remove from the UI
-    const clipElement = document.querySelector(`[data-clip-id="${clipId}"]`);
-    if (clipElement) {
-      clipElement.remove();
+    function showNotification(message: string, isError: boolean = false): void {
+      const notification = document.createElement('div');
+      notification.className = 'toast-notification';
+      if (isError) {
+        notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)'; // Red for error
+      }
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('visible');
+        setTimeout(() => {
+          notification.classList.remove('visible');
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 300);
+        }, 1500);
+      }, 10);
     }
     
-    // Clear selection if this was the selected clip
-    if (selectedClipId === clipId) {
-      selectedClipId = null;
+    // First let's determine the correct track for this clip
+    let correctTrackId = trackId;
+    let clipFound = false;
+    let clipToRemove: AudioClip | undefined;
+    
+    // Check if the clip is in the specified track
+    const track = trackService.getAllTracks().find(t => t.id === trackId);
+    if (track) {
+      clipToRemove = track.clips.find(c => c.id === clipId);
+      if (clipToRemove) {
+        clipFound = true;
+      }
+    } else {
+      console.error(`Track ${trackId} not found`);
     }
     
-    // Update the track width after removing a clip
-    updateTrackWidth();
+    // If clip not found in the specified track, search all tracks
+    if (!clipFound) {
+      console.warn(`Clip ${clipId} not found in track ${trackId}, searching other tracks...`);
+      
+      trackService.getAllTracks().forEach(t => {
+        const clip = t.clips.find(c => c.id === clipId);
+        if (clip) {
+          console.log(`Found clip ${clipId} in track ${t.id} instead`);
+          correctTrackId = t.id;
+          clipToRemove = clip;
+          clipFound = true;
+        }
+      });
+    }
+    
+    if (!clipFound) {
+      console.error(`Clip ${clipId} not found in any track`);
+      showNotification('Could not find the clip to delete', true);
+      return;
+    }
+    
+    try {
+      // Remove from the track service data model
+      trackService.removeClipFromTrack(correctTrackId, clipId);
+      console.log(`Removed clip ${clipId} from track data model (track: ${correctTrackId})`);
+      
+      // Remove from the UI - try both specific and general selector
+      let clipElement = document.querySelector(`.track[data-track-id="${correctTrackId}"] [data-clip-id="${clipId}"]`);
+      if (!clipElement) {
+        // Try more general selector if specific one failed
+        clipElement = document.querySelector(`[data-clip-id="${clipId}"]`);
+      }
+      
+      if (clipElement) {
+        // Add a visual effect before removing the element
+        clipElement.classList.add('deleting');
+        
+        // Remove after a brief delay for the effect to be visible
+        setTimeout(() => {
+          clipElement?.remove();
+          console.log(`Removed clip ${clipId} from UI`);
+        }, 100);
+      } else {
+        console.warn(`Could not find clip element in DOM: ${clipId}`);
+      }
+      
+      // Clear selection if this was the selected clip
+      if (selectedClipId === clipId) {
+        selectedClipId = null;
+        console.log(`Cleared selected clip ID (was ${clipId})`);
+      }
+      
+      // Show success notification
+      showNotification('Clip deleted');
+      
+      // Verify the clip was actually removed from the data model
+      const updatedTrack = trackService.getAllTracks().find(t => t.id === correctTrackId);
+      const clipStillExists = updatedTrack?.clips.some(c => c.id === clipId);
+      
+      if (clipStillExists) {
+        console.error(`Failed to remove clip ${clipId} from track data model`);
+        showNotification('Error: Clip may not have been fully removed', true);
+      }
+      
+      // Update the track width after removing a clip
+      updateTrackWidth();
+    } catch (error) {
+      console.error(`Error removing clip ${clipId}:`, error);
+      showNotification(`Error removing clip: ${error instanceof Error ? error.message : 'Unknown error'}`, true);
+    }
   }
   
   // Function to copy the selected clip
   function copySelectedClip(): boolean {
     if (!selectedClipId) {
       console.log('No clip selected to copy');
+      
+      // Show a notification to the user
+      const notification = document.createElement('div');
+      notification.className = 'toast-notification';
+      notification.style.backgroundColor = 'rgba(255, 165, 0, 0.9)'; // Orange for warning
+      notification.textContent = 'Please select a clip to copy';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('visible');
+        setTimeout(() => {
+          notification.classList.remove('visible');
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 300);
+        }, 1500);
+      }, 10);
+      
       return false;
     }
     
-    const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`) as HTMLElement;
-    if (!clipElement) {
-      console.log('Selected clip element not found');
-      return false;
+    console.log(`Attempting to copy clip with ID: ${selectedClipId}`);
+    
+    // First check directly in the track service before looking for DOM elements
+    let foundClip: AudioClip | null = null;
+    let foundTrackId: string | null = null;
+    
+    // Search through all tracks and clips for the selected clip ID
+    trackService.getAllTracks().forEach(track => {
+      const clip = track.clips.find(c => c.id === selectedClipId);
+      if (clip) {
+        foundClip = clip;
+        foundTrackId = track.id;
+      }
+    });
+    
+    // If found directly in the track service, use that
+    if (foundClip && foundTrackId) {
+      console.log(`Found clip ${selectedClipId} directly in track service (track: ${foundTrackId})`);
+      
+      if (!foundClip.buffer) {
+        console.error('Cannot copy clip with missing audio buffer');
+        
+        // Show error notification
+        const notification = document.createElement('div');
+        notification.className = 'toast-notification';
+        notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)'; // Red for error
+        notification.textContent = 'Cannot copy clip with missing audio';
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+          notification.classList.add('visible');
+          setTimeout(() => {
+            notification.classList.remove('visible');
+            setTimeout(() => {
+              document.body.removeChild(notification);
+            }, 300);
+          }, 1500);
+        }, 10);
+        
+        return false;
+      }
+      
+      // Store clip data in clipboard
+      clipboardData = {
+        clipId: foundClip.id,
+        trackId: foundTrackId,
+        startTime: foundClip.startTime,
+        duration: foundClip.duration,
+        audioBuffer: foundClip.buffer,
+        name: foundClip.name
+      };
+      
+      console.log(`Copied clip "${foundClip.name}" to clipboard (from track service)`);
+      
+      // Try to find the DOM element for visual feedback
+      const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`) as HTMLElement;
+      if (clipElement) {
+        // Visual feedback - flash effect
+        clipElement.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.7)';
+        clipElement.style.transform = 'scale(1.02)';
+        setTimeout(() => {
+          clipElement.style.boxShadow = '';
+          clipElement.style.transform = '';
+        }, 300);
+      }
+      
+      // Show toast notification
+      const notification = document.createElement('div');
+      notification.className = 'toast-notification';
+      notification.textContent = 'Clip copied';
+      document.body.appendChild(notification);
+      
+      // Show and then hide the notification
+      setTimeout(() => {
+        notification.classList.add('visible');
+        setTimeout(() => {
+          notification.classList.remove('visible');
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 300); // Wait for fade-out animation
+        }, 1500); // Show for 1.5 seconds
+      }, 10);
+      
+      return true;
     }
     
-    const trackElement = clipElement.closest('.track');
-    if (!trackElement) {
-      console.log('Parent track element not found');
-      return false;
-    }
+    console.error(`Selected clip ${selectedClipId} not found in track service`);
     
-    const trackId = trackElement.getAttribute('data-track-id');
-    if (!trackId) {
-      console.log('Track ID not found');
-      return false;
-    }
-    
-    // Find the clip in the track service
-    const track = trackService.getAllTracks().find(t => t.id === trackId);
-    if (!track) {
-      console.log('Track not found in service');
-      return false;
-    }
-    
-    const clip = track.clips.find(c => c.id === selectedClipId);
-    if (!clip) {
-      console.log('Clip not found in track data');
-      return false;
-    }
-    
-    // Store clip data in clipboard
-    clipboardData = {
-      clipId: clip.id,
-      trackId: trackId,
-      startTime: clip.startTime,
-      duration: clip.duration,
-      audioBuffer: clip.buffer,
-      name: clip.name
-    };
-    
-    console.log(`Copied clip "${clip.name}" to clipboard`);
-    
-    // Visual feedback
-    // Visual feedback - flash effect
-    clipElement.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.7)';
-    clipElement.style.transform = 'scale(1.02)';
-    setTimeout(() => {
-      clipElement.style.boxShadow = '';
-      clipElement.style.transform = '';
-    }, 300);
-    
-    // Show toast notification
+    // Show error notification
     const notification = document.createElement('div');
     notification.className = 'toast-notification';
-    notification.textContent = 'Clip copied';
+    notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)'; // Red for error
+    notification.textContent = 'Selected clip not found';
     document.body.appendChild(notification);
     
-    // Show and then hide the notification
     setTimeout(() => {
       notification.classList.add('visible');
       setTimeout(() => {
         notification.classList.remove('visible');
         setTimeout(() => {
           document.body.removeChild(notification);
-        }, 300); // Wait for fade-out animation
-      }, 1500); // Show for 1.5 seconds
+        }, 300);
+      }, 1500);
     }, 10);
     
-    return true;
+    return false;
   }
   
   // Function to paste the copied clip to the selected track
   function pasteClipToSelectedTrack(): boolean {
-    if (!clipboardData || !clipboardData.audioBuffer) {
-      console.log('No valid clip in clipboard');
+    console.log('Attempting to paste clip from clipboard');
+    
+    function showNotification(message: string, isError: boolean = false): void {
+      const notification = document.createElement('div');
+      notification.className = 'toast-notification';
+      if (isError) {
+        notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)'; // Red for error
+      } else if (message.includes('Please')) {
+        notification.style.backgroundColor = 'rgba(255, 165, 0, 0.9)'; // Orange for warning
+      }
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('visible');
+        setTimeout(() => {
+          notification.classList.remove('visible');
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 300);
+        }, 1500);
+      }, 10);
+    }
+    
+    if (!clipboardData) {
+      console.error('No clipboard data available');
+      showNotification('Please copy a clip first', true);
+      return false;
+    }
+    
+    if (!clipboardData.audioBuffer) {
+      console.error('Clipboard data has no audio buffer');
+      showNotification('Cannot paste clip: missing audio data', true);
       return false;
     }
     
     if (!selectedTrackId) {
-      console.log('No track selected for paste operation');
+      console.error('No track selected for paste operation');
+      showNotification('Please select a track to paste to', true);
       return false;
     }
     
-    // Create a new clip based on the clipboard data
-    const newClip: AudioClip = {
-      id: crypto.randomUUID(),
-      buffer: clipboardData.audioBuffer,
-      // Position it at cursor or slightly offset from the original
-      startTime: clipboardData.startTime, 
-      duration: clipboardData.duration,
-      offset: 0,
-      name: `${clipboardData.name} (copy)`
-    };
+    // Log details about the audio buffer being pasted
+    console.log(`Pasting audio buffer: ${clipboardData.audioBuffer.duration}s, ${clipboardData.audioBuffer.numberOfChannels} channels`);
     
-    // Add the clip to the selected track
-    addClipToTrack(selectedTrackId, newClip);
-    
-    console.log(`Pasted clip "${newClip.name}" to track ${selectedTrackId}`);
-    
-    // Visual feedback for the track
-    const trackElement = document.querySelector(`[data-track-id="${selectedTrackId}"]`);
-    if (trackElement) {
-      trackElement.classList.add('paste-highlight');
-      setTimeout(() => {
-        trackElement.classList.remove('paste-highlight');
-      }, 300);
+    // Verify the target track exists before attempting to add the clip
+    const targetTrack = trackService.getAllTracks().find(t => t.id === selectedTrackId);
+    if (!targetTrack) {
+      console.error(`Target track ${selectedTrackId} not found in track service`);
+      showNotification('Target track not found', true);
+      return false;
     }
     
-    // Show toast notification
-    const notification = document.createElement('div');
-    notification.className = 'toast-notification';
-    notification.textContent = 'Clip pasted';
-    document.body.appendChild(notification);
+    console.log(`Found target track: ${targetTrack.id}, adding clip...`);
     
-    // Show and then hide the notification
-    setTimeout(() => {
-      notification.classList.add('visible');
-      setTimeout(() => {
-        notification.classList.remove('visible');
+    try {
+      // Create a new clip based on the clipboard data
+      const newClip: AudioClip = {
+        id: crypto.randomUUID(),
+        buffer: clipboardData.audioBuffer,
+        // Position it at cursor or slightly offset from the original
+        startTime: clipboardData.startTime, 
+        duration: clipboardData.duration,
+        offset: 0,
+        name: `${clipboardData.name} (copy)`
+      };
+      
+      console.log(`Created new clip: ${newClip.id}, name: ${newClip.name}, duration: ${newClip.duration}s`);
+      
+      // Add the clip to the selected track
+      addClipToTrack(selectedTrackId, newClip);
+      
+      console.log(`Pasted clip "${newClip.name}" to track ${selectedTrackId}`);
+      
+      // Verify clip was added to the track model
+      const updatedTrack = trackService.getAllTracks().find(t => t.id === selectedTrackId);
+      const clipAddedToModel = updatedTrack?.clips.some(c => c.id === newClip.id);
+      
+      console.log(`Clip added to track model: ${clipAddedToModel ? 'yes' : 'no'}`);
+      
+      if (!clipAddedToModel) {
+        console.error('Clip was not properly added to the track model');
+        showNotification('Error adding clip to track', true);
+        return false;
+      }
+      
+      // Visual feedback for the track
+      const trackElement = document.querySelector(`[data-track-id="${selectedTrackId}"]`);
+      if (trackElement) {
+        trackElement.classList.add('paste-highlight');
         setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 300); // Wait for fade-out animation
-      }, 1500); // Show for 1.5 seconds
-    }, 10);
-    
-    return true;
+          trackElement.classList.remove('paste-highlight');
+        }, 300);
+        
+        // Check for clip element in the DOM
+        setTimeout(() => {
+          const clipElement = trackElement.querySelector(`[data-clip-id="${newClip.id}"]`);
+          console.log(`Clip element added to DOM: ${clipElement ? 'yes' : 'no'}`);
+          
+          if (clipElement) {
+            // Extra visual feedback on the newly created clip
+            clipElement.classList.add('pasted');
+            setTimeout(() => {
+              clipElement.classList.remove('pasted');
+            }, 1000);
+          }
+        }, 100);
+      }
+      
+      // Update track width to accommodate the new clip
+      updateTrackWidth();
+      
+      // Show success notification
+      showNotification('Clip pasted');
+      
+      return true;
+    } catch (error) {
+      console.error('Error during paste operation:', error);
+      showNotification(`Paste failed: ${error instanceof Error ? error.message : 'Unknown error'}`, true);
+      return false;
+    }
   }
   
   // Function to handle keyboard shortcuts
@@ -1028,6 +1240,47 @@ export function setupEventHandlers(
     let dragThreshold = 5; // Pixels to move before a click becomes a drag
     let wasWithinTrackDrag = false; // Track if we were doing a within-track drag
     
+    // Handle clip selection - this is the primary event handler for selecting clips
+    clipElement.addEventListener('click', (e) => {
+      console.log(`Clip clicked: ${clip.id}`);
+      
+      // Don't handle clicks on action buttons
+      if ((e.target as HTMLElement).closest('.clip-actions')) {
+        console.log('Click on action button, ignoring selection');
+        return;
+      }
+      
+      // Don't handle clicks on trim handles
+      if ((e.target as HTMLElement).classList.contains('trim-handle')) {
+        console.log('Click on trim handle, ignoring selection');
+        return;
+      }
+      
+      // Toggle selection state
+      const isAlreadySelected = clipElement.classList.contains('selected');
+      console.log(`Clip was already selected: ${isAlreadySelected}`);
+      
+      // Clear any other selected clips first
+      document.querySelectorAll('.audio-clip.selected').forEach(selectedClip => {
+        if (selectedClip !== clipElement) {
+          console.log(`Deselecting other clip: ${selectedClip.getAttribute('data-clip-id')}`);
+          selectedClip.classList.remove('selected');
+        }
+      });
+      
+      // If it wasn't already selected, select it now
+      if (!isAlreadySelected) {
+        clipElement.classList.add('selected');
+        selectedClipId = clip.id;
+        console.log(`Selected clip: ${clip.id}`);
+      } else {
+        // If it was already selected, deselect it
+        clipElement.classList.remove('selected');
+        selectedClipId = null;
+        console.log(`Deselected clip: ${clip.id}`);
+      }
+    });
+    
     // Add event listeners for clip interaction - for dragging between tracks
     clipElement.addEventListener('dragstart', (e) => {
       console.log('dragstart fired', e.clientX, e.clientY);
@@ -1092,42 +1345,7 @@ export function setupEventHandlers(
       }, 100);
     });
     
-    // Handle clip selection - need to add the click handler as well
-    clipElement.addEventListener('click', (e) => {
-      // Don't handle clicks on action buttons
-      if ((e.target as HTMLElement).closest('.clip-actions')) {
-        return;
-      }
-      
-      // Don't handle clicks on trim handles
-      if ((e.target as HTMLElement).classList.contains('trim-handle')) {
-        return;
-      }
-      
-      // Toggle selection state
-      const isAlreadySelected = clipElement.classList.contains('selected');
-      
-      // Clear any other selected clips first
-      document.querySelectorAll('.audio-clip.selected').forEach(selectedClip => {
-        if (selectedClip !== clipElement) {
-          selectedClip.classList.remove('selected');
-        }
-      });
-      
-      // If it wasn't already selected, select it now
-      if (!isAlreadySelected) {
-        clipElement.classList.add('selected');
-        selectedClipId = clip.id;
-      } else {
-        // If it was already selected, deselect it
-        clipElement.classList.remove('selected');
-        selectedClipId = null;
-      }
-      
-      console.log(`Clip ${clip.id} ${!isAlreadySelected ? 'selected' : 'deselected'}`);
-    });
-    
-    // Also keep the custom event handler
+    // Handle custom event for clip selection from other components
     clipElement.addEventListener('clip:select', (e: Event) => {
       const customEvent = e as CustomEvent;
       const { clipId, selected } = customEvent.detail;

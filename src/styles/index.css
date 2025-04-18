@@ -633,6 +633,29 @@ body {
   100% { background-color: var(--primary-color); }
 }
 
+/* Styles for newly pasted clips */
+.audio-clip.pasted {
+  animation: pasted-clip-animation 0.7s ease;
+}
+
+@keyframes pasted-clip-animation {
+  0% { transform: scale(0.95); background-color: var(--primary-color); }
+  50% { transform: scale(1.05); background-color: #4caf50; box-shadow: 0 0 15px rgba(76, 175, 80, 0.7); }
+  100% { transform: scale(1); background-color: var(--primary-color); }
+}
+
+/* Styles for clips being deleted */
+.audio-clip.deleting {
+  animation: deleting-clip-animation 0.2s ease;
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+@keyframes deleting-clip-animation {
+  0% { transform: scale(1); opacity: 1; background-color: var(--primary-color); }
+  100% { transform: scale(0.8); opacity: 0; background-color: #e74c3c; }
+}
+
 /* Add visual cue to indicate draggable functionality */
 .audio-clip:before {
   content: '⠿'; /* Unicode grip pattern */

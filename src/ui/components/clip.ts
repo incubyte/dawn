@@ -88,49 +88,12 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   // Make clip draggable
   clipElement.draggable = true;
   
-  // Make clip selectable - but within its own event handler
-  clipElement.addEventListener('click', (e) => {
-    // Don't handle clicks on action buttons
-    if ((e.target as HTMLElement).closest('.clip-actions')) {
-      return;
-    }
-    
-    // Don't handle clicks on trim handles
-    if ((e.target as HTMLElement).classList.contains('trim-handle')) {
-      return;
-    }
-    
-    // Toggle selection state
-    const isAlreadySelected = clipElement.classList.contains('selected');
-    
-    // Clear any other selected clips first
-    document.querySelectorAll('.audio-clip.selected').forEach(selectedClip => {
-      if (selectedClip !== clipElement) {
-        selectedClip.classList.remove('selected');
-      }
-    });
-    
-    // If it wasn't already selected, select it now
-    if (!isAlreadySelected) {
-      clipElement.classList.add('selected');
-    } else {
-      // If it was already selected, deselect it
-      clipElement.classList.remove('selected');
-    }
-    
-    // Dispatch an event for clip selection
-    const selectEvent = new CustomEvent('clip:select', {
-      bubbles: true,
-      detail: {
-        clipId: clip.id,
-        trackElement: clipElement.closest('.track'),
-        clipElement: clipElement,
-        selected: !isAlreadySelected
-      }
-    });
-    
-    clipElement.dispatchEvent(selectEvent);
-  });
+  // We don't need this click handler anymore as it's handled in events.ts
+  // Instead, we will just ensure the clip is draggable and selectable
+  clipElement.draggable = true;
+  
+  // Note that the actual selection behavior will be managed by the events.ts file
+  // This simplifies things and avoids duplicate event handler conflicts
   
   // Setup trim handlers
   setupTrimHandlers(clipElement, leftTrimHandle, rightTrimHandle, trimGuide, clip, pixelsPerSecond);
