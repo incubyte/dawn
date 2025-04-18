@@ -352,6 +352,8 @@ export function setupEventHandlers(
         const isMuted = trackService.toggleMute(track.id);
         // Update UI to reflect the mute state
         muteButton.classList.toggle('active', isMuted);
+        // Add or remove the muted class on the track for visual effects
+        trackElement.classList.toggle('muted', isMuted);
         // Add visual feedback
         muteButton.setAttribute('title', isMuted ? 'Unmute' : 'Mute');
       });
@@ -363,10 +365,42 @@ export function setupEventHandlers(
       soloButton.addEventListener('click', () => {
         // Use track service to handle soloing (which also updates audio graph)
         const isSolo = trackService.toggleSolo(track.id);
+        
         // Update UI to reflect the solo state
         soloButton.classList.toggle('active', isSolo);
+        
         // Add visual feedback
         soloButton.setAttribute('title', isSolo ? 'Unsolo' : 'Solo');
+        
+        // Check if any tracks are soloed
+        const hasSoloTracks = trackService.getAllTracks().some(t => t.solo);
+        
+        // Update all track visual states based on solo status
+        if (hasSoloTracks) {
+          // Apply visual muted effect to all non-soloed tracks
+          document.querySelectorAll('.track').forEach(trackEl => {
+            const trackId = trackEl.getAttribute('data-track-id');
+            if (trackId) {
+              const trackData = trackService.getAllTracks().find(t => t.id === trackId);
+              if (trackData) {
+                // Add muted class to tracks that are not soloed (for visual effect)
+                trackEl.classList.toggle('muted', !trackData.solo);
+              }
+            }
+          });
+        } else {
+          // No solo tracks, revert to normal mute status
+          document.querySelectorAll('.track').forEach(trackEl => {
+            const trackId = trackEl.getAttribute('data-track-id');
+            if (trackId) {
+              const trackData = trackService.getAllTracks().find(t => t.id === trackId);
+              if (trackData) {
+                // Base muted visual state on track's mute status only
+                trackEl.classList.toggle('muted', trackData.muted);
+              }
+            }
+          });
+        }
       });
     }
     

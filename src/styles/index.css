@@ -469,6 +469,13 @@ body {
   background-color: #e74c3c;
 }
 
+/* Apply grayscale effect to audio clips in muted tracks */
+.track.muted .audio-clip {
+  filter: grayscale(100%) brightness(0.8);
+  opacity: 0.8;
+  transition: filter 0.3s, opacity 0.3s;
+}
+
 .solo-button.active {
   background-color: #f1c40f;
   color: #000;
