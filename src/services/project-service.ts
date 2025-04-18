@@ -36,6 +36,8 @@ export interface ProjectService {
   getProjectAsJSON(): Promise<SerializableProject>;
   getCurrentProjectName(): string | null;
   getOriginalFileName(): string | null;
+  getGitHubPath(): string | null;
+  setGitHubPath(path: string | null): void;
   hasUnsavedChanges(): boolean;
 }
 
@@ -45,6 +47,7 @@ export function createProjectService(
 ): ProjectService {
   let currentProjectName: string | null = null;
   let originalFileName: string | null = null;
+  let githubPath: string | null = null; // Track GitHub file path
   let lastSavedState: string | null = null;
   const audioFileService = createAudioFileService(audioContext);
   
@@ -349,6 +352,21 @@ export function createProjectService(
      */
     getOriginalFileName(): string | null {
       return originalFileName;
+    },
+    
+    /**
+     * Get the GitHub file path if loaded from GitHub
+     */
+    getGitHubPath(): string | null {
+      return githubPath;
+    },
+    
+    /**
+     * Set the GitHub file path
+     */
+    setGitHubPath(path: string | null): void {
+      githubPath = path;
+      console.log(`GitHub path set to: ${path}`);
     },
     
     /**
