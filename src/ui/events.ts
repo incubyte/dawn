@@ -109,9 +109,9 @@ export function setupEventHandlers(
   // Listen for project loading events
   document.addEventListener('project:loaded', (e: Event) => {
     const customEvent = e as CustomEvent;
-    const { name } = customEvent.detail;
+    const { name, fileName } = customEvent.detail;
     
-    console.log(`Project loaded: ${name}`);
+    console.log(`Project loaded: ${name}${fileName ? ` (from file: ${fileName})` : ''}`);
     
     // Remove all existing tracks from the UI
     const tracksContainer = document.getElementById('tracks-container');
@@ -144,7 +144,7 @@ export function setupEventHandlers(
     // Show notification
     const notification = document.createElement('div');
     notification.className = 'toast-notification';
-    notification.textContent = `Project "${name}" loaded`;
+    notification.textContent = `Project "${name}" loaded${fileName ? ' from existing file' : ''}`;
     document.body.appendChild(notification);
     
     // Show and then hide the notification

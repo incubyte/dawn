@@ -915,7 +915,7 @@ body {
 }
 
 /* Modal Dialog */
-.modal-dialog {
+.modal-dialog, .confirmation-dialog {
   position: fixed;
   top: 0;
   left: 0;
@@ -926,6 +926,11 @@ body {
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-dialog {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.2s ease, visibility 0.2s ease;
@@ -936,7 +941,7 @@ body {
   visibility: visible;
 }
 
-.modal-content {
+.modal-content, .confirmation-content {
   background-color: var(--modal-bg);
   border-radius: 4px;
   width: 500px;
@@ -945,8 +950,64 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
   transform: translateY(20px);
   transition: transform 0.3s ease;
+}
+
+.confirmation-content {
+  padding: 1.5rem;
+}
+
+.confirmation-content h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  color: var(--primary-color);
+}
+
+.confirmation-content p {
+  margin: 0.5rem 0;
+  line-height: 1.5;
+}
+
+.confirmation-content strong {
+  color: #f39c12;
+}
+
+.confirmation-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.confirmation-buttons button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.confirmation-buttons button#confirm-save {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+}
+
+.confirmation-buttons button#confirm-save:hover {
+  background-color: #0069c0;
+}
+
+.confirmation-buttons button#cancel-save {
+  background-color: transparent;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.confirmation-buttons button#cancel-save:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .modal-dialog.visible .modal-content {

@@ -39,6 +39,9 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
       <button id="save-button" class="transport-button" title="Save Project">
         Save
       </button>
+      <button id="save-as-button" class="transport-button" title="Save Project As...">
+        Save As
+      </button>
       <button id="load-button" class="transport-button" title="Load Project">
         Load
       </button>
@@ -67,6 +70,7 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   const deleteClipButton = document.getElementById('delete-clip-button');
   const deleteTrackButton = document.getElementById('delete-track-button');
   const saveButton = document.getElementById('save-button');
+  const saveAsButton = document.getElementById('save-as-button');
   const loadButton = document.getElementById('load-button');
   const exportButton = document.getElementById('export-button');
   
@@ -267,88 +271,193 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
     });
   }
   
-  // Save project button
+  // Helper function to show notifications
+  function showNotification(message: string, isError: boolean = false) {
+    const notification = document.createElement('div');
+    notification.className = 'toast-notification';
+    if (isError) {
+      notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+    }
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Show and then hide the notification
+    setTimeout(() => {
+      notification.classList.add('visible');
+      setTimeout(() => {
+        notification.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300); // Wait for fade-out animation
+      }, 1500); // Show for 1.5 seconds
+    }, 10);
+  }
+  
+  // Helper function to initiate a download
+  async function downloadProject(blob: Blob, fileName: string) {
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+  
+  // Save project button - uses existing filename when available
   if (saveButton && audioEngine) {
     saveButton.addEventListener('click', async () => {
       console.log('Save button clicked');
       
       try {
-        // Show a dialog to let the user enter a project name
-        const projectName = prompt('Enter a name for your project:', 'My Project');
-        if (!projectName) {
-          console.log('Save cancelled - no project name provided');
-          return;
+        // Check if we have a current project file
+        const originalFileName = audioEngine.projectService.getOriginalFileName();
+        const currentProjectName = audioEngine.projectService.getCurrentProjectName();
+        
+        if (!currentProjectName) {
+          // If no project name exists yet, redirect to Save As functionality
+          if (saveAsButton) {
+            console.log('No current project name, redirecting to Save As');
+            saveAsButton.click();
+            return;
+          }
         }
         
         // Show saving message
         saveButton.textContent = 'Saving...';
         (saveButton as HTMLButtonElement).disabled = true;
         
-        // Use the project service to save the project
-        const projectBlob = await audioEngine.saveProject(projectName);
-        
-        // Create download link
-        const url = URL.createObjectURL(projectBlob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `${projectName}.dawn.zip`;
-        document.body.appendChild(a);
-        a.click();
-        
-        // Cleanup
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          
-          // Reset button
-          saveButton.textContent = 'Save';
-          (saveButton as HTMLButtonElement).disabled = false;
-          
-          // Show success notification
-          const notification = document.createElement('div');
-          notification.className = 'toast-notification';
-          notification.textContent = 'Project saved successfully';
-          document.body.appendChild(notification);
-          
-          // Show and then hide the notification
-          setTimeout(() => {
-            notification.classList.add('visible');
-            setTimeout(() => {
-              notification.classList.remove('visible');
-              setTimeout(() => {
-                document.body.removeChild(notification);
-              }, 300); // Wait for fade-out animation
-            }, 1500); // Show for 1.5 seconds
-          }, 10);
-        }, 100);
-      } catch (error) {
-        console.error('Error saving project:', error);
-        
-        // Reset button
-        saveButton.textContent = 'Save Failed';
-        
-        // Show error notification
-        const notification = document.createElement('div');
-        notification.className = 'toast-notification';
-        notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
-        notification.textContent = 'Failed to save project';
-        document.body.appendChild(notification);
-        
-        // Show and then hide the notification
-        setTimeout(() => {
-          notification.classList.add('visible');
-          setTimeout(() => {
-            notification.classList.remove('visible');
-            setTimeout(() => {
-              document.body.removeChild(notification);
+        try {
+          // For a loaded project, show a more informative confirmation dialog
+          if (originalFileName) {
+            // For better UX, let's show a modal explaining the browser limitation
+            const confirmDialog = document.createElement('div');
+            confirmDialog.className = 'confirmation-dialog';
+            confirmDialog.innerHTML = `
+              <div class="confirmation-content">
+                <h2>Save Project</h2>
+                <p>Your project "${currentProjectName}" will be saved as an updated version.</p>
+                <p><strong>Important:</strong> Due to browser security, this will download a new file "${originalFileName}" 
+                that will replace your previous version.</p>
+                <p>To update your project, simply save this file in the same location as the original.</p>
+                <div class="confirmation-buttons">
+                  <button id="confirm-save">Save</button>
+                  <button id="cancel-save">Cancel</button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(confirmDialog);
+            
+            // Add event handlers for the dialog buttons
+            return new Promise<void>((resolve) => {
+              const confirmButton = document.getElementById('confirm-save');
+              const cancelButton = document.getElementById('cancel-save');
               
-              // Reset button after delay
+              if (confirmButton) {
+                confirmButton.addEventListener('click', async () => {
+                  // Remove the dialog
+                  document.body.removeChild(confirmDialog);
+                  
+                  // Proceed with the save operation
+                  const projectBlob = await audioEngine.saveProject(currentProjectName!);
+                  const fileName = originalFileName;
+                  console.log(`Saving project to file: ${fileName}`);
+                  
+                  // Download the project
+                  await downloadProject(projectBlob, fileName);
+                  
+                  // Show success notification with special message for updates
+                  showNotification(`Project saved. Replace the original file with this updated version.`);
+                  
+                  resolve();
+                });
+              }
+              
+              if (cancelButton) {
+                cancelButton.addEventListener('click', () => {
+                  // Remove the dialog and cancel the operation
+                  document.body.removeChild(confirmDialog);
+                  resolve();
+                });
+              }
+            }).finally(() => {
+              // Reset button regardless of selection
               saveButton.textContent = 'Save';
               (saveButton as HTMLButtonElement).disabled = false;
-            }, 300); // Wait for fade-out animation
-          }, 1500); // Show for 1.5 seconds
-        }, 10);
+            });
+          } else {
+            // For new projects, just save with the current name
+            const projectBlob = await audioEngine.saveProject(currentProjectName!);
+            const fileName = `${currentProjectName}.dawn.zip`;
+            console.log(`Saving project to file: ${fileName}`);
+            
+            // Download the project
+            await downloadProject(projectBlob, fileName);
+            
+            // Show success notification
+            showNotification('Project saved successfully');
+          }
+        } finally {
+          // Reset button regardless of success/failure
+          saveButton.textContent = 'Save';
+          (saveButton as HTMLButtonElement).disabled = false;
+        }
+      } catch (error) {
+        console.error('Error saving project:', error);
+        showNotification('Failed to save project', true);
+      }
+    });
+  }
+  
+  // Save As project button - always asks for a filename
+  if (saveAsButton && audioEngine) {
+    saveAsButton.addEventListener('click', async () => {
+      console.log('Save As button clicked');
+      
+      try {
+        // Get current project name as default
+        const currentProjectName = audioEngine.projectService.getCurrentProjectName() || 'My Project';
+        
+        // Show a dialog to let the user enter a project name
+        const projectName = prompt('Enter a name for your project:', currentProjectName);
+        if (!projectName) {
+          console.log('Save cancelled - no project name provided');
+          return;
+        }
+        
+        // Show saving message
+        saveAsButton.textContent = 'Saving...';
+        (saveAsButton as HTMLButtonElement).disabled = true;
+        
+        try {
+          // Use the project service to save the project
+          const projectBlob = await audioEngine.saveProject(projectName);
+          
+          // Always generate a new filename for Save As
+          const fileName = `${projectName}.dawn.zip`;
+          console.log(`Saving project as: ${fileName}`);
+          
+          // Download the project
+          await downloadProject(projectBlob, fileName);
+          
+          // Show success notification
+          showNotification('Project saved as "' + projectName + '"');
+          
+        } finally {
+          // Reset button regardless of success/failure
+          saveAsButton.textContent = 'Save As';
+          (saveAsButton as HTMLButtonElement).disabled = false;
+        }
+      } catch (error) {
+        console.error('Error saving project:', error);
+        showNotification('Failed to save project', true);
       }
     });
   }

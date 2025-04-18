@@ -35,6 +35,8 @@ export interface ProjectService {
   loadProject(file: File): Promise<boolean>;
   getProjectAsJSON(): Promise<SerializableProject>;
   getCurrentProjectName(): string | null;
+  getOriginalFileName(): string | null;
+  hasUnsavedChanges(): boolean;
 }
 
 export function createProjectService(
@@ -42,7 +44,78 @@ export function createProjectService(
   trackService: TrackService
 ): ProjectService {
   let currentProjectName: string | null = null;
+  let originalFileName: string | null = null;
+  let lastSavedState: string | null = null;
   const audioFileService = createAudioFileService(audioContext);
+  
+  // Function to update the last saved state
+  const updateLastSavedState = async () => {
+    try {
+      const project = await getProjectAsJSONInternal();
+      lastSavedState = JSON.stringify(project);
+    } catch (error) {
+      console.error('Error updating last saved state:', error);
+    }
+  };
+  
+  // Internal version of getProjectAsJSON to avoid circular references
+  const getProjectAsJSONInternal = async (): Promise<SerializableProject> => {
+    const tracks = trackService.getAllTracks();
+    const serializedTracks: SerializableTrack[] = [];
+    
+    for (const track of tracks) {
+      const serializedClips: SerializableClip[] = [];
+      
+      for (const clip of track.clips) {
+        // Create a serializable clip
+        const serializedClip: SerializableClip = {
+          id: clip.id,
+          name: clip.name,
+          startTime: clip.startTime,
+          duration: clip.duration,
+          offset: clip.offset,
+          audioFileName: `${clip.id}.wav` // Reference to the audio file
+        };
+        
+        serializedClips.push(serializedClip);
+      }
+      
+      // Create a serializable track
+      const serializedTrack: SerializableTrack = {
+        id: track.id,
+        gainValue: track.gainValue,
+        muted: track.muted,
+        solo: track.solo,
+        clips: serializedClips
+      };
+      
+      serializedTracks.push(serializedTrack);
+    }
+    
+    // Create the project object
+    const projectName = currentProjectName || 'Untitled Project';
+    const now = new Date().toISOString();
+    
+    const project: SerializableProject = {
+      version: '1.0',
+      name: projectName,
+      tracks: serializedTracks,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    return project;
+  };
+  
+  // Listen for track changes to detect unsaved changes
+  document.addEventListener('track:changed', () => {
+    console.log('Track changed event detected, project now has unsaved changes');
+  });
+  
+  // Listen for clip changes to detect unsaved changes
+  document.addEventListener('clip:changed', () => {
+    console.log('Clip changed event detected, project now has unsaved changes');
+  });
   
   return {
     /**
@@ -56,7 +129,7 @@ export function createProjectService(
       const zip = new JSZip();
       
       // Get the project data
-      const project = await this.getProjectAsJSON();
+      const project = await getProjectAsJSONInternal();
       
       // Add the project JSON to the zip
       zip.file("project.json", JSON.stringify(project, null, 2));
@@ -110,6 +183,9 @@ export function createProjectService(
         compressionOptions: { level: 6 }
       });
       
+      // Update the last saved state
+      await updateLastSavedState();
+      
       console.log(`Generated zip file: ${zipBlob.size} bytes`);
       return zipBlob;
     },
@@ -120,6 +196,9 @@ export function createProjectService(
     async loadProject(file: File): Promise<boolean> {
       try {
         console.log(`Loading project from file: ${file.name}`);
+        
+        // Store the original file name
+        originalFileName = file.name;
         
         // Load the zip file
         const zip = new JSZip();
@@ -231,14 +310,22 @@ export function createProjectService(
         // Update the current project name
         currentProjectName = project.name;
         
+        // Update the last saved state
+        await updateLastSavedState();
+        
         // Dispatch an event to notify UI components
         document.dispatchEvent(new CustomEvent('project:loaded', {
-          detail: { name: project.name }
+          detail: { 
+            name: project.name,
+            fileName: originalFileName 
+          }
         }));
         
         return true;
       } catch (error) {
         console.error('Error loading project:', error);
+        // Reset state on error
+        originalFileName = null;
         return false;
       }
     },
@@ -247,51 +334,7 @@ export function createProjectService(
      * Get the current project as a serializable JSON object
      */
     async getProjectAsJSON(): Promise<SerializableProject> {
-      const tracks = trackService.getAllTracks();
-      const serializedTracks: SerializableTrack[] = [];
-      
-      for (const track of tracks) {
-        const serializedClips: SerializableClip[] = [];
-        
-        for (const clip of track.clips) {
-          // Create a serializable clip
-          const serializedClip: SerializableClip = {
-            id: clip.id,
-            name: clip.name,
-            startTime: clip.startTime,
-            duration: clip.duration,
-            offset: clip.offset,
-            audioFileName: `${clip.id}.wav` // Reference to the audio file
-          };
-          
-          serializedClips.push(serializedClip);
-        }
-        
-        // Create a serializable track
-        const serializedTrack: SerializableTrack = {
-          id: track.id,
-          gainValue: track.gainValue,
-          muted: track.muted,
-          solo: track.solo,
-          clips: serializedClips
-        };
-        
-        serializedTracks.push(serializedTrack);
-      }
-      
-      // Create the project object
-      const projectName = currentProjectName || 'Untitled Project';
-      const now = new Date().toISOString();
-      
-      const project: SerializableProject = {
-        version: '1.0',
-        name: projectName,
-        tracks: serializedTracks,
-        createdAt: now,
-        updatedAt: now
-      };
-      
-      return project;
+      return getProjectAsJSONInternal();
     },
     
     /**
@@ -299,6 +342,25 @@ export function createProjectService(
      */
     getCurrentProjectName(): string | null {
       return currentProjectName;
+    },
+    
+    /**
+     * Get the original file name that was loaded
+     */
+    getOriginalFileName(): string | null {
+      return originalFileName;
+    },
+    
+    /**
+     * Check if there are unsaved changes
+     */
+    hasUnsavedChanges(): boolean {
+      // If no project has been loaded or saved yet, consider it unsaved
+      if (!lastSavedState) return true;
+      
+      // Simplified implementation - in a real app, this would compare the current state
+      // with the lastSavedState to determine if changes have been made
+      return true;
     }
   };
 }

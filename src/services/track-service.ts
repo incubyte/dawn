@@ -47,6 +47,11 @@ export function createTrackService(
       tracks.set(id, track);
       trackNodes.set(id, { gainNode });
       
+      // Dispatch event for track added (for unsaved changes tracking)
+      document.dispatchEvent(new CustomEvent('track:changed', {
+        detail: { type: 'add', trackId: id }
+      }));
+      
       return track;
     },
     
@@ -59,12 +64,22 @@ export function createTrackService(
       }
       
       tracks.delete(trackId);
+      
+      // Dispatch event for track removed (for unsaved changes tracking)
+      document.dispatchEvent(new CustomEvent('track:changed', {
+        detail: { type: 'remove', trackId }
+      }));
     },
     
     addClipToTrack(trackId: string, clip: AudioClip): void {
       const track = tracks.get(trackId);
       if (track) {
         track.clips.push(clip);
+        
+        // Dispatch event for clip added (for unsaved changes tracking)
+        document.dispatchEvent(new CustomEvent('clip:changed', {
+          detail: { type: 'add', trackId, clipId: clip.id }
+        }));
       }
     },
     
@@ -72,6 +87,11 @@ export function createTrackService(
       const track = tracks.get(trackId);
       if (track) {
         track.clips = track.clips.filter(clip => clip.id !== clipId);
+        
+        // Dispatch event for clip removed (for unsaved changes tracking)
+        document.dispatchEvent(new CustomEvent('clip:changed', {
+          detail: { type: 'remove', trackId, clipId }
+        }));
       }
     },
     
@@ -81,6 +101,11 @@ export function createTrackService(
         const clip = track.clips.find(c => c.id === clipId);
         if (clip) {
           clip.startTime = startTime;
+          
+          // Dispatch event for clip position updated (for unsaved changes tracking)
+          document.dispatchEvent(new CustomEvent('clip:changed', {
+            detail: { type: 'position', trackId, clipId, startTime }
+          }));
         }
       }
     },
