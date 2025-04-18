@@ -10,6 +10,7 @@ export interface TrackService {
   updateClipPosition(trackId: string, clipId: string, startTime: number): void;
   addEffectToTrack(trackId: string, effect: Effect): void;
   removeEffectFromTrack(trackId: string, effectId: string): void;
+  getTrackClips(trackId: string): AudioClip[];
 }
 
 export function createTrackService(
@@ -90,6 +91,11 @@ export function createTrackService(
       if (track) {
         track.effects = track.effects.filter(effect => effect.id !== effectId);
       }
+    },
+    
+    getTrackClips(trackId: string): AudioClip[] {
+      const track = tracks.get(trackId);
+      return track ? [...track.clips] : [];
     }
   };
 }

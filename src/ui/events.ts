@@ -6,6 +6,7 @@ import { createAudioFileService } from '../services/audio-file-service';
 import { createTrackService } from '../services/track-service';
 import { createReverbEffect } from '../effects/reverb';
 import { createDelayEffect } from '../effects/delay';
+import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
 
 export function setupEventHandlers(
   audioContext: AudioContext,
@@ -29,9 +30,6 @@ export function setupEventHandlers(
   const tracksContainer = document.getElementById('tracks-container');
   const timelineCursor = document.querySelector('.timeline-cursor');
   
-  // Set up drag and drop area for audio files
-  setupDragAndDrop();
-  
   // Transport controls
   if (playButton) {
     playButton.addEventListener('click', () => {
@@ -50,6 +48,7 @@ export function setupEventHandlers(
       }
       currentPlaybackTime = 0;
       updateTimeDisplay();
+      updateCursorPosition();
     });
   }
   
@@ -67,6 +66,61 @@ export function setupEventHandlers(
       // Export functionality would be added here
       console.log('Export clicked');
     });
+  }
+  
+  // Handle import event from the dialog
+  document.addEventListener('audio:import', (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const { trackId, files } = customEvent.detail;
+    
+    if (files && files.length > 0 && trackId) {
+      handleImportedFiles(files, trackId);
+    }
+  });
+  
+  // Function to handle imported files
+  async function handleImportedFiles(files: File[], trackId: string) {
+    const loadingIndicator = showLoadingIndicator();
+    
+    try {
+      // Process each file in sequence
+      for (const file of files) {
+        try {
+          const audioBuffer = await audioFileService.loadAudioFile(file);
+          
+          // Add clip to end of current content
+          const clips = trackService.getTrackClips(trackId);
+          let startTime = 0;
+          
+          if (clips && clips.length > 0) {
+            // Calculate the end time of the last clip
+            const lastClip = clips.reduce((latest, clip) => {
+              const clipEndTime = clip.startTime + clip.duration;
+              return clipEndTime > latest.endTime 
+                ? { endTime: clipEndTime } 
+                : latest;
+            }, { endTime: 0 });
+            
+            startTime = lastClip.endTime + 0.5; // Add a small gap
+          }
+          
+          const clip: AudioClip = {
+            id: crypto.randomUUID(),
+            buffer: audioBuffer,
+            startTime,
+            duration: audioBuffer.duration,
+            offset: 0,
+            name: file.name
+          };
+          
+          addClipToTrack(trackId, clip);
+        } catch (error) {
+          console.error(`Error loading audio file ${file.name}:`, error);
+        }
+      }
+    } finally {
+      hideLoadingIndicator();
+    }
   }
   
   // Update timer function
@@ -139,6 +193,9 @@ export function setupEventHandlers(
         track.gainValue = parseFloat(gainSlider.value);
       });
     }
+    
+    // Set up drag and drop for this track's clip area
+    setupTrackDropZone(trackElement.querySelector('.track-clips'));
   }
   
   // Function to add a clip to a track
@@ -172,88 +229,171 @@ export function setupEventHandlers(
       const target = e.target as HTMLElement;
       target.classList.remove('dragging');
     });
-  }
-  
-  // Setup drag and drop for audio files
-  function setupDragAndDrop() {
-    const dropZones = document.querySelectorAll('.track-clips');
     
-    // Prevent default drag behaviors
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      document.addEventListener(eventName, preventDefaults, false);
+    // Add click-and-drag for repositioning clips
+    let isDragging = false;
+    let startX = 0;
+    let originalLeft = 0;
+    
+    clipElement.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      originalLeft = parseInt(clipElement.style.left || '0', 10);
+      
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      
+      e.preventDefault(); // Prevent text selection
     });
     
-    function preventDefaults(e: Event) {
-      e.preventDefault();
-      e.stopPropagation();
+    function onMouseMove(e: MouseEvent) {
+      if (!isDragging) return;
+      
+      const deltaX = e.clientX - startX;
+      const newLeft = Math.max(0, originalLeft + deltaX);
+      clipElement.style.left = `${newLeft}px`;
+      
+      // Update clip data
+      const newStartTime = newLeft / pixelsPerSecond;
+      clip.startTime = newStartTime;
     }
     
-    // Highlight drop zone when item is dragged over it
+    function onMouseUp() {
+      isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      
+      // Update the clip position in the track service
+      trackService.updateClipPosition(trackId, clip.id, clip.startTime);
+    }
+  }
+  
+  // Setup individual track drop zone
+  function setupTrackDropZone(dropZone: Element | null) {
+    if (!dropZone) return;
+    
     ['dragenter', 'dragover'].forEach(eventName => {
-      dropZones.forEach(zone => {
-        zone.addEventListener(eventName, highlight, false);
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('drag-highlight');
       });
     });
     
     ['dragleave', 'drop'].forEach(eventName => {
-      dropZones.forEach(zone => {
-        zone.addEventListener(eventName, unhighlight, false);
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-highlight');
       });
     });
     
-    function highlight(e: Event) {
-      const target = e.target as HTMLElement;
-      target.classList.add('drag-highlight');
-    }
-    
-    function unhighlight(e: Event) {
-      const target = e.target as HTMLElement;
-      target.classList.remove('drag-highlight');
-    }
-    
-    // Handle dropped files
-    dropZones.forEach(zone => {
-      zone.addEventListener('drop', handleDrop, false);
+    // Handle drop on this specific track
+    dropZone.addEventListener('drop', async (e: DragEvent) => {
+      await handleFileDrop(e, dropZone);
     });
+  }
+  
+  // Handle file drop for audio files
+  async function handleFileDrop(e: DragEvent, dropZone: Element) {
+    if (!e.dataTransfer?.files.length) return;
     
-    async function handleDrop(e: DragEvent) {
-      if (!e.dataTransfer?.files) return;
-      
-      const trackElement = (e.target as HTMLElement).closest('.track');
-      if (!trackElement) return;
-      
-      const trackId = trackElement.dataset.trackId;
-      if (!trackId) return;
-      
-      const files = e.dataTransfer.files;
-      for (const file of Array.from(files)) {
-        if (file.type.startsWith('audio/')) {
-          try {
-            const audioBuffer = await audioFileService.loadAudioFile(file);
-            
-            // Calculate position based on drop coordinates
-            const trackClips = trackElement.querySelector('.track-clips');
-            const rect = trackClips?.getBoundingClientRect();
-            const trackX = rect ? e.clientX - rect.left : 0;
-            const startTime = trackX / pixelsPerSecond;
-            
-            const clip: AudioClip = {
-              id: crypto.randomUUID(),
-              buffer: audioBuffer,
-              startTime: startTime,
-              duration: audioBuffer.duration,
-              offset: 0,
-              name: file.name
-            };
-            
-            addClipToTrack(trackId, clip);
-          } catch (error) {
-            console.error('Error loading audio file:', error);
-          }
+    const trackElement = dropZone.closest('.track');
+    if (!trackElement) return;
+    
+    const trackId = trackElement.getAttribute('data-track-id');
+    if (!trackId) return;
+    
+    const files = Array.from(e.dataTransfer.files).filter(file => 
+      file.type.startsWith('audio/') || 
+      file.name.endsWith('.mp3') || 
+      file.name.endsWith('.wav') ||
+      file.name.endsWith('.ogg') ||
+      file.name.endsWith('.aac')
+    );
+    
+    if (files.length === 0) {
+      // Show error styling if no audio files
+      dropZone.classList.add('drag-error');
+      setTimeout(() => dropZone.classList.remove('drag-error'), 1500);
+      return;
+    }
+    
+    // Calculate position based on drop coordinates
+    const rect = dropZone.getBoundingClientRect();
+    const dropX = e.clientX - rect.left;
+    const startTime = Math.max(0, dropX / pixelsPerSecond);
+    
+    // Show loading indicator
+    const loadingIndicator = showLoadingIndicator();
+    
+    try {
+      // Process each file sequentially
+      for (const file of files) {
+        try {
+          const audioBuffer = await audioFileService.loadAudioFile(file);
+          
+          const clip: AudioClip = {
+            id: crypto.randomUUID(),
+            buffer: audioBuffer,
+            startTime,
+            duration: audioBuffer.duration,
+            offset: 0,
+            name: file.name
+          };
+          
+          addClipToTrack(trackId, clip);
+        } catch (error) {
+          console.error(`Error loading audio file ${file.name}:`, error);
         }
       }
+    } finally {
+      // Hide loading indicator
+      hideLoadingIndicator();
     }
   }
+  
+  // Set up document-level drag and drop handling
+  function setupGlobalDragAndDrop() {
+    // Prevent default behavior for the entire document
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      document.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+    
+    // Highlight all track-clips when dragging over the document
+    document.addEventListener('dragenter', (e) => {
+      if (e.dataTransfer?.types.includes('Files')) {
+        const trackClips = document.querySelectorAll('.track-clips');
+        trackClips.forEach(zone => {
+          zone.classList.add('drag-highlight');
+        });
+      }
+    });
+    
+    document.addEventListener('dragleave', (e) => {
+      // Only remove highlight if leaving the document
+      if (e.target === document.documentElement) {
+        const trackClips = document.querySelectorAll('.track-clips');
+        trackClips.forEach(zone => {
+          zone.classList.remove('drag-highlight');
+        });
+      }
+    });
+    
+    document.addEventListener('drop', () => {
+      // Remove all highlights on drop
+      const trackClips = document.querySelectorAll('.track-clips');
+      trackClips.forEach(zone => {
+        zone.classList.remove('drag-highlight');
+      });
+    });
+  }
+  
+  // Initialize drag and drop
+  setupGlobalDragAndDrop();
   
   // Add an initial track
   const initialTrack = trackService.addTrack();

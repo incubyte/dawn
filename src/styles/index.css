@@ -17,6 +17,12 @@
   --timeline-bg: #242424;
   --timeline-marker: #555555;
   --text-muted: #888888;
+  --drag-highlight: rgba(0, 120, 215, 0.3);
+  --drag-highlight-border: rgba(0, 120, 215, 0.8);
+  --drop-error: rgba(231, 76, 60, 0.3);
+  --drop-error-border: rgba(231, 76, 60, 0.8);
+  --modal-bg: #2d2d2d;
+  --modal-header: #333333;
 }
 
 body {
@@ -204,6 +210,7 @@ body {
   background-color: var(--track-bg);
   position: relative;
   overflow: hidden;
+  transition: background-color 0.2s;
 }
 
 .track-controls {
@@ -275,6 +282,18 @@ body {
   background: var(--primary-color);
   cursor: move;
   overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.audio-clip:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.audio-clip.dragging {
+  opacity: 0.7;
+  transform: scale(1.02);
+  z-index: 10;
 }
 
 .clip-label {
@@ -283,6 +302,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
 .clip-waveform {
@@ -290,4 +310,223 @@ body {
   width: 100%;
   background-size: 100% 100%;
   background-repeat: no-repeat;
+}
+
+/* Drag and Drop Styles */
+.drag-highlight {
+  background-color: var(--drag-highlight) !important;
+  border: 2px dashed var(--drag-highlight-border) !important;
+  box-shadow: inset 0 0 30px rgba(0, 120, 215, 0.1);
+}
+
+.drag-error {
+  background-color: var(--drop-error) !important;
+  border: 2px dashed var(--drop-error-border) !important;
+}
+
+/* Import Prompt */
+.track-clips::before {
+  content: "Drag audio files here";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.track-clips:not(:empty)::before {
+  content: "";
+}
+
+/* Loading indicator */
+.loading-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Modal Dialog */
+.modal-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.modal-dialog.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-content {
+  background-color: var(--modal-bg);
+  border-radius: 4px;
+  width: 500px;
+  max-width: 90%;
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  transform: translateY(20px);
+  transition: transform 0.3s ease;
+}
+
+.modal-dialog.visible .modal-content {
+  transform: translateY(0);
+}
+
+.modal-header {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--modal-header);
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 4px 4px 0 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  padding: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.dialog-button {
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dialog-button:hover {
+  background-color: var(--button-hover);
+}
+
+.primary-button {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.primary-button:hover {
+  background-color: var(--button-hover);
+}
+
+.primary-button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* File Import Dialog */
+.drop-area {
+  border: 2px dashed var(--border-color);
+  border-radius: 4px;
+  padding: 2rem;
+  text-align: center;
+  margin: 1rem 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.drop-area:hover,
+.drop-area.highlight {
+  border-color: var(--primary-color);
+  background-color: var(--drag-highlight);
+}
+
+.drop-message {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.selected-files {
+  margin-top: 1rem;
+}
+
+.selected-files h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
+.file-size {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.no-files {
+  color: var(--text-muted);
+  font-style: italic;
 }
