@@ -26,27 +26,36 @@ export function createTimeline(options: TimelineOptions = {
   const timelineWidth = totalDuration * pixelsPerSecond;
 
   timelineContainer.innerHTML = `
-    <div class="timeline-ruler" style="width: ${timelineWidth}px;">
-      <!-- Time markers will be generated here -->
+    <div class="timeline-header">
+      <!-- Empty space to align with track headers -->
     </div>
-    <div class="timeline-cursor"></div>
+    <div class="timeline-content">
+      <div class="timeline-ruler" style="width: ${timelineWidth}px;">
+        <!-- Time markers will be generated here -->
+      </div>
+      <div class="timeline-cursor"></div>
+    </div>
   `;
 
   generateTimeMarkers(timelineWidth, pixelsPerSecond, totalDuration, majorMarkerInterval);
 
   // Make timeline seekable
   if (onSeek) {
-    timelineContainer.addEventListener('click', (e) => {
-      const timelineRect = timelineContainer.getBoundingClientRect();
-      const clickX = e.clientX - timelineRect.left + timelineContainer.scrollLeft;
-      const seekTime = clickX / pixelsPerSecond;
-      onSeek(seekTime);
-    });
+    const timelineContent = timelineContainer.querySelector('.timeline-content');
+    if (timelineContent) {
+      timelineContent.addEventListener('click', (e) => {
+        const mouseEvent = e as MouseEvent;
+        const timelineRect = timelineContent.getBoundingClientRect();
+        const clickX = mouseEvent.clientX - timelineRect.left + timelineContainer.scrollLeft;
+        const seekTime = clickX / pixelsPerSecond;
+        onSeek(seekTime);
+      });
+    }
   }
 }
 
 export function updateTimelineCursor(time: number, pixelsPerSecond: number): void {
-  const cursor = document.querySelector('.timeline-cursor');
+  const cursor = document.querySelector('.timeline-content .timeline-cursor');
   if (!cursor) return;
 
   const position = time * pixelsPerSecond;
@@ -54,11 +63,14 @@ export function updateTimelineCursor(time: number, pixelsPerSecond: number): voi
 
   // Auto-scroll the timeline to keep the cursor visible
   const timeline = document.getElementById('timeline');
-  if (timeline) {
-    const timelineRect = timeline.getBoundingClientRect();
+  const timelineContent = document.querySelector('.timeline-content');
+  
+  if (timeline && timelineContent) {
+    const timelineRect = timelineContent.getBoundingClientRect();
     const cursorPosition = position;
     
-    // Calculate visible area boundaries
+    // Calculate visible area boundaries (account for the header width)
+    const headerWidth = 200; // Same as the CSS width
     const leftBoundary = timeline.scrollLeft + 50; // Add some padding
     const rightBoundary = timeline.scrollLeft + timelineRect.width - 50; // Add some padding
     
@@ -66,7 +78,7 @@ export function updateTimelineCursor(time: number, pixelsPerSecond: number): voi
     if (cursorPosition < leftBoundary || cursorPosition > rightBoundary) {
       // Scroll to keep cursor centered
       const tracksContainer = document.querySelector('.tracks-container');
-      const newScrollPosition = cursorPosition - (timelineRect.width / 2);
+      const newScrollPosition = cursorPosition - ((timelineRect.width - headerWidth) / 2);
       
       // Smooth scrolling
       timeline.scrollTo({
@@ -91,7 +103,7 @@ function generateTimeMarkers(
   totalDuration: number,
   majorMarkerInterval: number
 ): void {
-  const rulerElement = document.querySelector('.timeline-ruler');
+  const rulerElement = document.querySelector('.timeline-content .timeline-ruler');
   if (!rulerElement) return;
   
   let html = '';
@@ -116,7 +128,9 @@ function generateTimeMarkers(
 
   // Add zoom controls
   const timeline = document.getElementById('timeline');
-  if (timeline) {
+  const timelineHeader = document.querySelector('.timeline-header');
+  
+  if (timeline && timelineHeader) {
     // Create zoom controls container
     const zoomControls = document.createElement('div');
     zoomControls.className = 'zoom-controls';
@@ -125,8 +139,8 @@ function generateTimeMarkers(
       <button class="zoom-out-button" title="Zoom Out">-</button>
     `;
     
-    // Add to timeline
-    timeline.appendChild(zoomControls);
+    // Add to timeline header
+    timelineHeader.appendChild(zoomControls);
     
     // Add event listeners
     const zoomInButton = zoomControls.querySelector('.zoom-in-button');

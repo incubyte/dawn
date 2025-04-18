@@ -57,7 +57,7 @@ export function setupScrollSync(): void {
       const width = Math.max(window.innerWidth, pixelsPerSecond * totalDuration);
       
       // Update timeline ruler width
-      const timelineRuler = document.querySelector('.timeline-ruler');
+      const timelineRuler = document.querySelector('.timeline-content .timeline-ruler');
       if (timelineRuler) {
         (timelineRuler as HTMLElement).style.width = `${width}px`;
       }
@@ -95,7 +95,7 @@ export function updateTrackWidth(minWidth = 3000): void {
   }
   
   // Update timeline ruler width
-  const timelineRuler = document.querySelector('.timeline-ruler');
+  const timelineRuler = document.querySelector('.timeline-content .timeline-ruler');
   if (timelineRuler) {
     (timelineRuler as HTMLElement).style.width = `${width}px`;
   }

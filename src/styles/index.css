@@ -145,11 +145,31 @@ body {
   user-select: none;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
+  display: flex; /* Added to allow header and timeline content to be side by side */
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
 .timeline::-webkit-scrollbar {
   display: none;
+}
+
+/* Timeline header space to match track headers */
+.timeline-header {
+  width: 200px; /* Same as track-header width */
+  min-width: 200px; /* Ensure it doesn't shrink */
+  height: 100%;
+  background-color: var(--timeline-bg);
+  border-right: 1px solid var(--border-color);
+  z-index: 10;
+  position: sticky;
+  left: 0;
+}
+
+/* Timeline content container */
+.timeline-content {
+  flex: 1;
+  position: relative;
+  overflow-x: visible; /* Allow content to be seen */
 }
 
 .timeline-ruler {
@@ -205,6 +225,7 @@ body {
   display: flex;
   gap: 0.25rem;
   z-index: 20;
+  /* No need for absolute positioning within timeline-header */
 }
 
 .zoom-in-button,
