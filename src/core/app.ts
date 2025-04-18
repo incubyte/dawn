@@ -7,7 +7,7 @@ import { formatTime } from '../utils/time-formatter';
 import { setupAudioDebug } from '../utils/audio-debug';
 import { setupScrollSync, updateTrackWidth } from '../utils/scroll-sync';
 
-import { createWelcomeScreen, appSettings, StorageProvider } from '../ui/components/welcome-screen';
+import { createWelcomeScreen, StorageProvider } from '../ui/components/welcome-screen';
 
 export function initializeApp(): void {
   // Prepare the app container
@@ -54,7 +54,7 @@ function handleWelcomeScreenAction(
       <div id="transport-controls" class="transport-controls"></div>
       <div class="header-right">
         <span id="storage-indicator" class="storage-indicator">
-          ${storageProvider === 'github' ? '🐙 GitHub' : '💾 Local Storage'}
+          💾 Local Storage
         </span>
       </div>
     </div>
@@ -137,22 +137,13 @@ function initializeDAW(action: 'new' | 'load'): void {
   // Initialize track width
   updateTrackWidth();
   
-  // If the action is 'load', automatically open the load dialog based on storage provider
+  // If the action is 'load', automatically open the load dialog
   if (action === 'load') {
-    setTimeout(async () => {
-      if (appSettings.storageProvider === 'github' && appSettings.githubToken && appSettings.githubRepo) {
-        // GitHub loading logic - trigger the load button which now has GitHub support
-        console.log('Loading from GitHub:', appSettings.githubRepo);
-        const loadButton = document.getElementById('load-button');
-        if (loadButton) {
-          loadButton.click();
-        }
-      } else {
-        // Local storage loading - trigger the load button click
-        const loadButton = document.getElementById('load-button');
-        if (loadButton) {
-          loadButton.click();
-        }
+    setTimeout(() => {
+      // Local storage loading - trigger the load button click
+      const loadButton = document.getElementById('load-button');
+      if (loadButton) {
+        loadButton.click();
       }
     }, 500);
   }

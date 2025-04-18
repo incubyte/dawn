@@ -946,7 +946,10 @@ export function setupEventHandlers(
     if (foundClip && foundTrackId) {
       console.log(`Found clip ${selectedClipId} directly in track service (track: ${foundTrackId})`);
       
-      if (!foundClip.buffer) {
+      // Explicit type guard to ensure foundClip is treated as AudioClip
+      const audioClip: AudioClip = foundClip;
+      
+      if (!audioClip.buffer) {
         console.error('Cannot copy clip with missing audio buffer');
         
         // Show error notification
@@ -971,15 +974,15 @@ export function setupEventHandlers(
       
       // Store clip data in clipboard
       clipboardData = {
-        clipId: foundClip.id,
+        clipId: audioClip.id,
         trackId: foundTrackId,
-        startTime: foundClip.startTime,
-        duration: foundClip.duration,
-        audioBuffer: foundClip.buffer,
-        name: foundClip.name
+        startTime: audioClip.startTime,
+        duration: audioClip.duration,
+        audioBuffer: audioClip.buffer,
+        name: audioClip.name
       };
       
-      console.log(`Copied clip "${foundClip.name}" to clipboard (from track service)`);
+      console.log(`Copied clip "${audioClip.name}" to clipboard (from track service)`);
       
       // Try to find the DOM element for visual feedback
       const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`) as HTMLElement;

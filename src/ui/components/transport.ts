@@ -334,154 +334,89 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         saveButton.textContent = 'Saving...';
         (saveButton as HTMLButtonElement).disabled = true;
         
-        try {
-          // Import the settings/providers context
-          const { appSettings } = await import('../components/welcome-screen');
-          
-          // Check the storage provider first
-          if (appSettings.storageProvider === 'github' && appSettings.githubToken && appSettings.githubRepo) {
-            // Save to GitHub - this handles all GitHub projects regardless of whether they were loaded from GitHub
-            try {
-              const projectBlob = await audioEngine.saveProject(currentProjectName!);
-              
-              // Import the GitHub service dynamically
-              try {
-                const { GitHubService } = await import('../../services/github-service');
-                const githubService = new GitHubService();
-                
-                // Check if we have a GitHub path from a previously loaded GitHub project
-                const githubPath = audioEngine.projectService.getGitHubPath();
-                
-                // Use the GitHub path if available, otherwise use the original filename or create a new one
-                const savePath = githubPath || originalFileName || `${currentProjectName}.dawn.zip`;
-                
-                console.log(`Saving to GitHub using path: ${savePath}`);
-                
-                // Save to GitHub
-                await githubService.saveProject(savePath, projectBlob);
-                
-                // Show success notification with the path
-                const repoInfo = appSettings.githubRepo;
-                const fileName = savePath.split('/').pop();
-                showNotification(`Project "${fileName}" saved to GitHub repository: ${repoInfo}`);
-              } catch (githubError) {
-                console.error('Error using GitHub service:', githubError);
-                
-                // Fallback to local download with warning
-                const githubPath = audioEngine.projectService.getGitHubPath();
-                const fallbackName = githubPath?.split('/').pop() || originalFileName || `${currentProjectName}.dawn.zip`;
-                await downloadProject(projectBlob, fallbackName);
-                showNotification('Failed to save to GitHub - downloaded locally instead', true);
-              }
-            } catch (error) {
-              console.error('Error saving project:', error);
-              showNotification('Failed to save project', true);
-            }
-          } else if (originalFileName) {
-            // Local storage with existing file - show browser limitation explanation
-            const confirmDialog = document.createElement('div');
-            confirmDialog.className = 'confirmation-dialog';
-            confirmDialog.innerHTML = `
-              <div class="confirmation-content">
-                <h2>Save Project</h2>
-                <p>Your project "${currentProjectName}" will be saved as an updated version.</p>
-                <p><strong>Important:</strong> Due to browser security, this will download a new file "${originalFileName}" 
-                that will replace your previous version.</p>
-                <p>To update your project, simply save this file in the same location as the original.</p>
-                <div class="confirmation-buttons">
-                  <button id="confirm-save">Save</button>
-                  <button id="cancel-save">Cancel</button>
-                </div>
+        if (originalFileName) {
+          // Local storage with existing file - show browser limitation explanation
+          const confirmDialog = document.createElement('div');
+          confirmDialog.className = 'confirmation-dialog';
+          confirmDialog.innerHTML = `
+            <div class="confirmation-content">
+              <h2>Save Project</h2>
+              <p>Your project "${currentProjectName}" will be saved as an updated version.</p>
+              <p><strong>Important:</strong> Due to browser security, this will download a new file "${originalFileName}" 
+              that will replace your previous version.</p>
+              <p>To update your project, simply save this file in the same location as the original.</p>
+              <div class="confirmation-buttons">
+                <button id="confirm-save">Save</button>
+                <button id="cancel-save">Cancel</button>
               </div>
-            `;
-            document.body.appendChild(confirmDialog);
+            </div>
+          `;
+          document.body.appendChild(confirmDialog);
+          
+          // Add event handlers for the dialog buttons
+          return new Promise<void>((resolve) => {
+            const confirmButton = document.getElementById('confirm-save');
+            const cancelButton = document.getElementById('cancel-save');
             
-            // Add event handlers for the dialog buttons
-            return new Promise<void>((resolve) => {
-              const confirmButton = document.getElementById('confirm-save');
-              const cancelButton = document.getElementById('cancel-save');
-              
-              if (confirmButton) {
-                confirmButton.addEventListener('click', async () => {
-                  // Remove the dialog
-                  document.body.removeChild(confirmDialog);
-                  
-                  // Proceed with the save operation
-                  const projectBlob = await audioEngine.saveProject(currentProjectName!);
-                  const fileName = originalFileName;
-                  console.log(`Saving project to file: ${fileName}`);
-                  
-                  // Download the project
-                  await downloadProject(projectBlob, fileName);
-                  
-                  // Show success notification with special message for updates
-                  showNotification(`Project saved. Replace the original file with this updated version.`);
-                  
-                  resolve();
-                });
-              }
-              
-              if (cancelButton) {
-                cancelButton.addEventListener('click', () => {
-                  // Remove the dialog and cancel the operation
-                  document.body.removeChild(confirmDialog);
-                  resolve();
-                });
-              }
-            }).finally(() => {
-              // Reset button regardless of selection
-              saveButton.textContent = 'Save';
-              (saveButton as HTMLButtonElement).disabled = false;
-            });
-          } else {
-            // For new projects, we need to check if we're using GitHub
-            if (appSettings.storageProvider === 'github' && appSettings.githubToken && appSettings.githubRepo) {
-              // New project to be saved to GitHub
-              try {
+            if (confirmButton) {
+              confirmButton.addEventListener('click', async () => {
+                // Remove the dialog
+                document.body.removeChild(confirmDialog);
+                
+                // Proceed with the save operation
                 const projectBlob = await audioEngine.saveProject(currentProjectName!);
-                const fileName = `${currentProjectName}.dawn.zip`;
-                console.log(`Saving new project to GitHub: ${fileName}`);
+                const fileName = originalFileName;
+                console.log(`Saving project to file: ${fileName}`);
                 
-                // Import the GitHub service dynamically
-                const { GitHubService } = await import('../../services/github-service');
-                const githubService = new GitHubService();
-                
-                // Save to GitHub
-                await githubService.saveProject(fileName, projectBlob);
-                
-                // Show success notification
-                showNotification('New project saved to GitHub successfully');
-              } catch (error) {
-                console.error('Error saving new project to GitHub:', error);
-                
-                // Fallback to local download
-                const projectBlob = await audioEngine.saveProject(currentProjectName!);
-                const fileName = `${currentProjectName}.dawn.zip`;
+                // Download the project
                 await downloadProject(projectBlob, fileName);
                 
-                showNotification('Failed to save to GitHub - downloaded locally instead', true);
-              }
-            } else {
-              // Regular local storage for new projects
-              const projectBlob = await audioEngine.saveProject(currentProjectName!);
-              const fileName = `${currentProjectName}.dawn.zip`;
-              console.log(`Saving project to file: ${fileName}`);
-              
-              // Download the project
-              await downloadProject(projectBlob, fileName);
-              
-              // Show success notification
-              showNotification('Project saved successfully');
+                // Show success notification with special message for updates
+                showNotification(`Project saved. Replace the original file with this updated version.`);
+                
+                resolve();
+              });
             }
+            
+            if (cancelButton) {
+              cancelButton.addEventListener('click', () => {
+                // Remove the dialog and cancel the operation
+                document.body.removeChild(confirmDialog);
+                resolve();
+              });
+            }
+          }).finally(() => {
+            // Reset button regardless of selection
+            saveButton.textContent = 'Save';
+            (saveButton as HTMLButtonElement).disabled = false;
+          });
+        } else {
+          // For new projects, save locally
+          try {
+            const projectBlob = await audioEngine.saveProject(currentProjectName!);
+            const fileName = `${currentProjectName}.dawn.zip`;
+            console.log(`Saving project to file: ${fileName}`);
+            
+            // Download the project
+            await downloadProject(projectBlob, fileName);
+            
+            // Show success notification
+            showNotification('Project saved successfully');
+          } finally {
+            // Reset button regardless of success/failure
+            saveButton.textContent = 'Save';
+            (saveButton as HTMLButtonElement).disabled = false;
           }
-        } finally {
-          // Reset button regardless of success/failure
+        }
+      } catch (error: unknown) {
+        console.error('Error saving project:', error);
+        showNotification('Failed to save project', true);
+        
+        // Make sure the button is reset if there's an error
+        if (saveButton) {
           saveButton.textContent = 'Save';
           (saveButton as HTMLButtonElement).disabled = false;
         }
-      } catch (error) {
-        console.error('Error saving project:', error);
-        showNotification('Failed to save project', true);
       }
     });
   }
@@ -507,9 +442,6 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         (saveAsButton as HTMLButtonElement).disabled = true;
         
         try {
-          // Import the settings to check storage provider
-          const { appSettings } = await import('../components/welcome-screen');
-          
           // Use the project service to save the project
           const projectBlob = await audioEngine.saveProject(projectName);
           
@@ -517,51 +449,11 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
           const fileName = `${projectName}.dawn.zip`;
           console.log(`Saving project as: ${fileName}`);
           
-          // Check which storage provider to use
-          if (appSettings.storageProvider === 'github' && appSettings.githubToken && appSettings.githubRepo) {
-            // Save to GitHub
-            try {
-              // Import the GitHub service dynamically
-              const { GitHubService } = await import('../../services/github-service');
-              const githubService = new GitHubService();
-              
-              // Check for GitHub path from previously loaded project
-              const githubPath = audioEngine.projectService.getGitHubPath();
-              
-              // For SaveAs, we'll create a new path based on the new name, preserving directory structure if present
-              let newPath = fileName;
-              if (githubPath) {
-                // If there's a directory structure in the original path, maintain it
-                const lastSlash = githubPath.lastIndexOf('/');
-                if (lastSlash > 0) {
-                  // Keep the directory structure but use the new filename
-                  newPath = githubPath.substring(0, lastSlash + 1) + fileName;
-                }
-              }
-              
-              console.log(`Saving to GitHub using path: ${newPath}`);
-              
-              // Save with new path and update the stored path
-              await githubService.saveProject(newPath, projectBlob);
-              audioEngine.projectService.setGitHubPath(newPath);
-              
-              // Show success notification
-              const repoInfo = appSettings.githubRepo;
-              showNotification(`Project "${fileName}" saved to GitHub repository: ${repoInfo}`);
-            } catch (githubError) {
-              console.error('Error using GitHub service:', githubError);
-              
-              // Fallback to local download with warning
-              await downloadProject(projectBlob, fileName);
-              showNotification('Failed to save to GitHub - downloaded locally instead', true);
-            }
-          } else {
-            // Download the project locally
-            await downloadProject(projectBlob, fileName);
+          // Download the project locally
+          await downloadProject(projectBlob, fileName);
             
-            // Show success notification
-            showNotification('Project saved as "' + projectName + '"');
-          }
+          // Show success notification
+          showNotification('Project saved as "' + projectName + '"');
         } finally {
           // Reset button regardless of success/failure
           saveAsButton.textContent = 'Save As';
@@ -576,158 +468,13 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   
   // Load project button
   if (loadButton && audioEngine) {
-    loadButton.addEventListener('click', async () => {
+    // Store references to elements and services we'll need
+    const localAudioEngine = audioEngine;
+    const localLoadButton = loadButton;
+    
+    localLoadButton.addEventListener('click', () => {
       console.log('Load button clicked');
-      
-      try {
-        // Import the settings to check storage provider
-        const { appSettings } = await import('../components/welcome-screen');
-        
-        // Check which storage provider to use
-        if (appSettings.storageProvider === 'github' && appSettings.githubToken && appSettings.githubRepo) {
-          // Use GitHub as storage provider
-          try {
-            // Show loading message
-            loadButton.textContent = 'Loading...';
-            (loadButton as HTMLButtonElement).disabled = true;
-            
-            // Import the GitHub service
-            const { GitHubService } = await import('../../services/github-service');
-            const githubService = new GitHubService();
-            
-            try {
-              // Create a GitHub project selector dialog
-              const dialog = document.createElement('div');
-              dialog.className = 'modal-dialog visible';
-              dialog.innerHTML = `
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h2>Select Project from GitHub</h2>
-                    <button class="close-button" id="gh-close-dialog">&times;</button>
-                  </div>
-                  <div class="modal-body">
-                    <div id="gh-projects-list" class="github-container">
-                      <p>Loading projects from GitHub...</p>
-                    </div>
-                  </div>
-                </div>
-              `;
-              
-              document.body.appendChild(dialog);
-              
-              // Handle close button
-              const closeButton = document.getElementById('gh-close-dialog');
-              if (closeButton) {
-                closeButton.addEventListener('click', () => {
-                  document.body.removeChild(dialog);
-                  loadButton.textContent = 'Load';
-                  (loadButton as HTMLButtonElement).disabled = false;
-                });
-              }
-              
-              // Load projects from GitHub
-              const projectsList = document.getElementById('gh-projects-list');
-              if (projectsList) {
-                try {
-                  const projects = await githubService.listProjects();
-                  
-                  if (projects.length === 0) {
-                    projectsList.innerHTML = '<p>No projects found in this repository.</p>';
-                  } else {
-                    projectsList.innerHTML = `
-                      <h3>Select a project to load:</h3>
-                      <div class="github-repo-selector">
-                        ${projects.map(project => `
-                          <div class="repo-item" data-path="${project.path}">
-                            <span class="repo-icon">📄</span>
-                            <span class="repo-name">${project.name}</span>
-                          </div>
-                        `).join('')}
-                      </div>
-                    `;
-                    
-                    // Add click handlers for project items
-                    const projectItems = document.querySelectorAll('.repo-item');
-                    projectItems.forEach(item => {
-                      item.addEventListener('click', async () => {
-                        const path = item.getAttribute('data-path');
-                        
-                        if (path) {
-                          try {
-                            // Show loading state
-                            projectsList.innerHTML = '<p>Loading project...</p>';
-                            
-                            // Get the project blob from GitHub
-                            const projectBlob = await githubService.getProject(path);
-                            
-                            // Remove the dialog
-                            document.body.removeChild(dialog);
-                            
-                            // Convert to File object
-                            const file = new File([projectBlob], path.split('/').pop() || 'project.dawn.zip', {
-                              type: 'application/zip'
-                            });
-                            
-                            // Load the project
-                            const success = await audioEngine.loadProject(file);
-                            
-                            // Store the GitHub path for later use (needed when saving back to GitHub)
-                            audioEngine.projectService.setGitHubPath(path);
-                            
-                            console.log(`GitHub project loaded from path: ${path}`);
-                            
-                            // Force update track width and UI after loading
-                            setTimeout(() => {
-                              document.dispatchEvent(new CustomEvent('updateTrackWidth'));
-                            }, 500);
-                            
-                            if (success) {
-                              showNotification('Project loaded successfully from GitHub');
-                            } else {
-                              showNotification('Failed to load project', true);
-                            }
-                          } catch (error) {
-                            console.error('Error loading GitHub project:', error);
-                            showNotification('Error loading project from GitHub', true);
-                          } finally {
-                            loadButton.textContent = 'Load';
-                            (loadButton as HTMLButtonElement).disabled = false;
-                          }
-                        }
-                      });
-                    });
-                  }
-                } catch (error) {
-                  console.error('Error listing GitHub projects:', error);
-                  projectsList.innerHTML = `
-                    <p class="error">Error loading projects from GitHub: ${error.message}</p>
-                    <p>Please check your GitHub token and repository settings.</p>
-                  `;
-                }
-              }
-            } catch (error) {
-              console.error('Error with GitHub UI:', error);
-              showNotification('Error connecting to GitHub', true);
-              loadButton.textContent = 'Load';
-              (loadButton as HTMLButtonElement).disabled = false;
-            }
-          } catch (error) {
-            console.error('Error importing GitHub service:', error);
-            showNotification('GitHub integration failed - falling back to local load', true);
-            
-            // Fall back to local file loading
-            handleLocalFileLoad();
-          }
-        } else {
-          // Use local storage
-          handleLocalFileLoad();
-        }
-      } catch (error) {
-        console.error('Error during load operation:', error);
-        showNotification('Error loading project', true);
-        loadButton.textContent = 'Load';
-        (loadButton as HTMLButtonElement).disabled = false;
-      }
+      handleLocalFileLoad();
     });
     
     // Helper function to handle local file loading
@@ -747,17 +494,16 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
             console.log(`Selected file: ${file.name}`);
             
             // Show loading message
-            loadButton.textContent = 'Loading...';
-            (loadButton as HTMLButtonElement).disabled = true;
+            localLoadButton.textContent = 'Loading...';
+            (localLoadButton as HTMLButtonElement).disabled = true;
             
             try {
               // Load the project
               console.log('Starting project load...');
-              const success = await audioEngine.loadProject(file);
+              const success = await localAudioEngine.loadProject(file);
               console.log(`Project load result: ${success ? 'success' : 'failure'}`);
               
-              // Clear any GitHub path since this is a local file
-              audioEngine.projectService.setGitHubPath(null);
+              // Local file loaded
               
               // Force update track width and UI after loading
               setTimeout(() => {
@@ -770,13 +516,13 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
               } else {
                 showNotification('Failed to load project', true);
               }
-            } catch (error) {
+            } catch (error: unknown) {
               console.error('Error loading project:', error);
               showNotification('Error loading project', true);
             } finally {
               // Reset button
-              loadButton.textContent = 'Load';
-              (loadButton as HTMLButtonElement).disabled = false;
+              localLoadButton.textContent = 'Load';
+              (localLoadButton as HTMLButtonElement).disabled = false;
             }
           }
           
@@ -786,12 +532,12 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         
         // Trigger the file dialog
         fileInput.click();
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error setting up file input:', error);
         
         // Reset button
-        loadButton.textContent = 'Load';
-        (loadButton as HTMLButtonElement).disabled = false;
+        localLoadButton.textContent = 'Load';
+        (localLoadButton as HTMLButtonElement).disabled = false;
       }
     }
   }
@@ -825,15 +571,20 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
           exportButton.textContent = 'Export';
           (exportButton as HTMLButtonElement).disabled = false;
         }, 100);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error exporting mix:', error);
-        exportButton.textContent = 'Export Failed';
         
-        // Reset button after delay
-        setTimeout(() => {
-          exportButton.textContent = 'Export';
-          (exportButton as HTMLButtonElement).disabled = false;
-        }, 2000);
+        if (exportButton) {
+          exportButton.textContent = 'Export Failed';
+          
+          // Reset button after delay
+          setTimeout(() => {
+            if (exportButton) {
+              exportButton.textContent = 'Export';
+              (exportButton as HTMLButtonElement).disabled = false;
+            }
+          }, 2000);
+        }
       }
     });
   }
