@@ -1,16 +1,42 @@
 export interface AudioFileService {
   loadAudioFile(file: File): Promise<AudioBuffer>;
-  exportAudioBuffer(buffer: AudioBuffer, filename: string): void;
+  exportAudioBuffer(buffer: AudioBuffer, filename: string): Blob;
 }
 
 export function createAudioFileService(audioContext: AudioContext): AudioFileService {
   return {
     async loadAudioFile(file: File): Promise<AudioBuffer> {
-      const arrayBuffer = await file.arrayBuffer();
-      return await audioContext.decodeAudioData(arrayBuffer);
+      console.log(`Loading file: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
+      
+      try {
+        // Ensure the audio context is running
+        if (audioContext.state === 'suspended') {
+          console.log('Resuming audio context for decoding');
+          await audioContext.resume();
+        }
+        
+        // Read the file as an ArrayBuffer
+        const arrayBuffer = await file.arrayBuffer();
+        console.log(`File loaded as ArrayBuffer, size: ${arrayBuffer.byteLength} bytes`);
+        
+        // Try to decode the audio
+        try {
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          console.log(`Audio decoded successfully: ${audioBuffer.duration}s, ${audioBuffer.numberOfChannels} channels, ${audioBuffer.sampleRate}Hz`);
+          return audioBuffer;
+        } catch (decodeError: any) {
+          console.error('Error decoding audio data:', decodeError);
+          throw new Error(`Failed to decode audio file: ${decodeError?.message || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Error loading audio file:', error);
+        throw error;
+      }
     },
     
-    exportAudioBuffer(buffer: AudioBuffer, filename: string): void {
+    exportAudioBuffer(buffer: AudioBuffer, filename: string): Blob {
+      console.log(`Exporting audio buffer: ${buffer.duration}s, ${buffer.numberOfChannels} channels`);
+      
       // Convert AudioBuffer to WAV format
       const wav = audioBufferToWav(buffer);
       const blob = new Blob([wav], { type: 'audio/wav' });
@@ -29,15 +55,14 @@ export function createAudioFileService(audioContext: AudioContext): AudioFileSer
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }, 100);
+      
+      return blob;
     }
   };
 }
 
 // Helper function to convert AudioBuffer to WAV format
 function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
-  // This is a simplified implementation - a real one would need more details
-  // For a real implementation, consider using a library like wavefile or audiobuffer-to-wav
-  
   const numOfChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
   const format = 1; // PCM format
@@ -83,7 +108,6 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
   
   let offset = 44;
   const samples = buffer.length;
-  const scale = 0x7FFF; // for 16-bit
   
   for (let i = 0; i < samples; i++) {
     for (let channel = 0; channel < numOfChannels; channel++) {

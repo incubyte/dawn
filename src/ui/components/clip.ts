@@ -6,6 +6,8 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   const clipElement = document.createElement('div');
   clipElement.classList.add('audio-clip');
   clipElement.dataset.clipId = clip.id;
+  clipElement.dataset.startTime = clip.startTime.toString();
+  clipElement.dataset.duration = clip.duration.toString();
   clipElement.style.width = `${width}px`;
   clipElement.style.left = `${clip.startTime * pixelsPerSecond}px`;
   
@@ -65,7 +67,13 @@ export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, from
     clipElement.style.left = `${newLeft}px`;
     clipElement.style.width = `${newWidth}px`;
     
-    // Update clip data would be handled by the track service
+    // Update data attributes
+    const originalStartTime = parseFloat(clipElement.dataset.startTime || '0');
+    const originalDuration = parseFloat(clipElement.dataset.duration || '0');
+    const offsetSeconds = offsetPixels / pixelsPerSecond;
+    
+    clipElement.dataset.startTime = (originalStartTime + offsetSeconds).toString();
+    clipElement.dataset.duration = (originalDuration - offsetSeconds).toString();
   } else {
     // Trim from end
     const newWidth = width - offsetPixels;
@@ -74,6 +82,10 @@ export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, from
     
     clipElement.style.width = `${newWidth}px`;
     
-    // Update clip data would be handled by the track service
+    // Update data attributes
+    const originalDuration = parseFloat(clipElement.dataset.duration || '0');
+    const offsetSeconds = offsetPixels / pixelsPerSecond;
+    
+    clipElement.dataset.duration = (originalDuration - offsetSeconds).toString();
   }
 }

@@ -4,14 +4,16 @@ import { AudioTrack } from '../models/audio-track';
 import { formatTime } from '../utils/time-formatter';
 import { createAudioFileService } from '../services/audio-file-service';
 import { createTrackService } from '../services/track-service';
-import { createReverbEffect } from '../effects/reverb';
-import { createDelayEffect } from '../effects/delay';
 import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
+import { AudioEngine } from '../core/audio-engine';
 
 export function setupEventHandlers(
   audioContext: AudioContext,
-  masterGainNode: GainNode
+  masterGainNode: GainNode,
+  audioEngine?: AudioEngine
 ): void {
+  // Note: In a full implementation, the AudioEngine should be passed directly
+  // rather than recreating these services
   const trackService = createTrackService(audioContext, masterGainNode);
   const audioFileService = createAudioFileService(audioContext);
   
@@ -30,26 +32,29 @@ export function setupEventHandlers(
   const tracksContainer = document.getElementById('tracks-container');
   const timelineCursor = document.querySelector('.timeline-cursor');
   
-  // Transport controls
-  if (playButton) {
-    playButton.addEventListener('click', () => {
-      if (!isPlaying) {
-        isPlaying = true;
-        startTime = audioContext.currentTime - currentPlaybackTime;
-        updateTimer();
-      }
-    });
-  }
-  
-  if (stopButton) {
-    stopButton.addEventListener('click', () => {
-      if (isPlaying) {
-        isPlaying = false;
-      }
-      currentPlaybackTime = 0;
-      updateTimeDisplay();
-      updateCursorPosition();
-    });
+  // Transport controls - only apply these if we don't have a reference to the AudioEngine
+  // (otherwise, they're handled by transport.ts)
+  if (!audioEngine) {
+    if (playButton) {
+      playButton.addEventListener('click', () => {
+        if (!isPlaying) {
+          isPlaying = true;
+          startTime = audioContext.currentTime - currentPlaybackTime;
+          updateTimer();
+        }
+      });
+    }
+    
+    if (stopButton) {
+      stopButton.addEventListener('click', () => {
+        if (isPlaying) {
+          isPlaying = false;
+        }
+        currentPlaybackTime = 0;
+        updateTimeDisplay();
+        updateCursorPosition();
+      });
+    }
   }
   
   // Add track button
@@ -80,7 +85,7 @@ export function setupEventHandlers(
   
   // Function to handle imported files
   async function handleImportedFiles(files: File[], trackId: string) {
-    const loadingIndicator = showLoadingIndicator();
+    showLoadingIndicator();
     
     try {
       // Process each file in sequence
@@ -143,7 +148,7 @@ export function setupEventHandlers(
   function updateCursorPosition() {
     if (timelineCursor) {
       const position = currentPlaybackTime * pixelsPerSecond;
-      timelineCursor.style.left = `${position}px`;
+      (timelineCursor as HTMLElement).style.left = `${position}px`;
     }
   }
   
@@ -256,6 +261,9 @@ export function setupEventHandlers(
       // Update clip data
       const newStartTime = newLeft / pixelsPerSecond;
       clip.startTime = newStartTime;
+      
+      // Update data attribute for zoom changes
+      clipElement.dataset.startTime = newStartTime.toString();
     }
     
     function onMouseUp() {
@@ -289,22 +297,38 @@ export function setupEventHandlers(
     });
     
     // Handle drop on this specific track
-    dropZone.addEventListener('drop', async (e: DragEvent) => {
+    dropZone.addEventListener('drop', async (e) => {
       await handleFileDrop(e, dropZone);
     });
   }
   
   // Handle file drop for audio files
-  async function handleFileDrop(e: DragEvent, dropZone: Element) {
-    if (!e.dataTransfer?.files.length) return;
+  async function handleFileDrop(e: Event, dropZone: Element) {
+    const dragEvent = e as DragEvent;
+    if (!dragEvent.dataTransfer?.files.length) return;
+    
+    console.log(`File drop detected with ${dragEvent.dataTransfer.files.length} files`);
     
     const trackElement = dropZone.closest('.track');
-    if (!trackElement) return;
+    if (!trackElement) {
+      console.warn('No track element found for drop');
+      return;
+    }
     
     const trackId = trackElement.getAttribute('data-track-id');
-    if (!trackId) return;
+    if (!trackId) {
+      console.warn('No track ID found for drop');
+      return;
+    }
     
-    const files = Array.from(e.dataTransfer.files).filter(file => 
+    console.log(`Files dropped on track ${trackId}`);
+    
+    // Log file types for debugging
+    Array.from(dragEvent.dataTransfer.files).forEach(file => {
+      console.log(`File: ${file.name}, Type: ${file.type}, Size: ${file.size} bytes`);
+    });
+    
+    const files = Array.from(dragEvent.dataTransfer.files).filter(file => 
       file.type.startsWith('audio/') || 
       file.name.endsWith('.mp3') || 
       file.name.endsWith('.wav') ||
@@ -312,8 +336,11 @@ export function setupEventHandlers(
       file.name.endsWith('.aac')
     );
     
+    console.log(`Filtered to ${files.length} audio files`);
+    
     if (files.length === 0) {
       // Show error styling if no audio files
+      console.warn('No audio files found in drop');
       dropZone.classList.add('drag-error');
       setTimeout(() => dropZone.classList.remove('drag-error'), 1500);
       return;
@@ -321,17 +348,27 @@ export function setupEventHandlers(
     
     // Calculate position based on drop coordinates
     const rect = dropZone.getBoundingClientRect();
-    const dropX = e.clientX - rect.left;
+    const dropX = dragEvent.clientX - rect.left;
     const startTime = Math.max(0, dropX / pixelsPerSecond);
+    console.log(`Calculated drop position: ${startTime}s (x: ${dropX}px, pixelsPerSecond: ${pixelsPerSecond})`);
     
     // Show loading indicator
-    const loadingIndicator = showLoadingIndicator();
+    showLoadingIndicator();
     
     try {
       // Process each file sequentially
       for (const file of files) {
         try {
+          console.log(`Loading audio file ${file.name}...`);
+          
+          // Make sure the audio context is running
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+            console.log('Audio context resumed for file loading');
+          }
+          
           const audioBuffer = await audioFileService.loadAudioFile(file);
+          console.log(`Audio file loaded, duration: ${audioBuffer.duration}s, channels: ${audioBuffer.numberOfChannels}`);
           
           const clip: AudioClip = {
             id: crypto.randomUUID(),
@@ -342,6 +379,7 @@ export function setupEventHandlers(
             name: file.name
           };
           
+          console.log(`Adding clip to track ${trackId} at ${startTime}s`);
           addClipToTrack(trackId, clip);
         } catch (error) {
           console.error(`Error loading audio file ${file.name}:`, error);

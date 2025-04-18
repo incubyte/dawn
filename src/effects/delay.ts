@@ -1,4 +1,4 @@
-import { Effect, EffectType, EffectParameter } from '../models/effect';
+import { Effect, EffectType } from '../models/effect';
 
 export function createDelayEffect(audioContext: AudioContext): Effect {
   const delay = audioContext.createDelay();

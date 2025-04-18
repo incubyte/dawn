@@ -11,6 +11,8 @@ export interface TrackService {
   addEffectToTrack(trackId: string, effect: Effect): void;
   removeEffectFromTrack(trackId: string, effectId: string): void;
   getTrackClips(trackId: string): AudioClip[];
+  getAllTracks(): AudioTrack[];
+  getTrackGainNode(trackId: string): GainNode | undefined;
 }
 
 export function createTrackService(
@@ -96,6 +98,15 @@ export function createTrackService(
     getTrackClips(trackId: string): AudioClip[] {
       const track = tracks.get(trackId);
       return track ? [...track.clips] : [];
+    },
+    
+    getAllTracks(): AudioTrack[] {
+      return Array.from(tracks.values());
+    },
+    
+    getTrackGainNode(trackId: string): GainNode | undefined {
+      const trackNode = trackNodes.get(trackId);
+      return trackNode?.gainNode;
     }
   };
 }

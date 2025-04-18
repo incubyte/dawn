@@ -1,29 +1,84 @@
-export function createTimeline(): void {
+import { formatTime } from '../../utils/time-formatter';
+
+interface TimelineOptions {
+  pixelsPerSecond: number;
+  totalDuration: number;
+  majorMarkerInterval: number;
+  onSeek?: (time: number) => void;
+}
+
+export function createTimeline(options: TimelineOptions = {
+  pixelsPerSecond: 10,
+  totalDuration: 300,
+  majorMarkerInterval: 30
+}): void {
   const timelineContainer = document.getElementById('timeline');
   if (!timelineContainer) return;
 
+  const {
+    pixelsPerSecond,
+    totalDuration,
+    majorMarkerInterval,
+    onSeek
+  } = options;
+
+  // Calculate the width of the timeline
+  const timelineWidth = totalDuration * pixelsPerSecond;
+
   timelineContainer.innerHTML = `
-    <div class="timeline-ruler">
+    <div class="timeline-ruler" style="width: ${timelineWidth}px;">
       <!-- Time markers will be generated here -->
     </div>
     <div class="timeline-cursor"></div>
   `;
 
-  generateTimeMarkers();
+  generateTimeMarkers(timelineWidth, pixelsPerSecond, totalDuration, majorMarkerInterval);
+
+  // Make timeline seekable
+  if (onSeek) {
+    timelineContainer.addEventListener('click', (e) => {
+      const timelineRect = timelineContainer.getBoundingClientRect();
+      const clickX = e.clientX - timelineRect.left + timelineContainer.scrollLeft;
+      const seekTime = clickX / pixelsPerSecond;
+      onSeek(seekTime);
+    });
+  }
 }
 
-function generateTimeMarkers(): void {
+export function updateTimelineCursor(time: number, pixelsPerSecond: number): void {
+  const cursor = document.querySelector('.timeline-cursor');
+  if (!cursor) return;
+
+  const position = time * pixelsPerSecond;
+  cursor.setAttribute('style', `left: ${position}px`);
+
+  // Auto-scroll the timeline to keep the cursor visible
+  const timeline = document.getElementById('timeline');
+  if (timeline) {
+    const timelineRect = timeline.getBoundingClientRect();
+    const cursorPosition = position;
+    
+    // Check if cursor is outside the visible area
+    if (cursorPosition < timeline.scrollLeft || 
+        cursorPosition > timeline.scrollLeft + timelineRect.width) {
+      // Scroll to keep cursor centered
+      timeline.scrollLeft = cursorPosition - (timelineRect.width / 2);
+    }
+  }
+}
+
+function generateTimeMarkers(
+  _timelineWidth: number, // Prefixed with underscore to indicate it's not used
+  pixelsPerSecond: number,
+  totalDuration: number,
+  majorMarkerInterval: number
+): void {
   const rulerElement = document.querySelector('.timeline-ruler');
   if (!rulerElement) return;
-
-  // Generate time markers for 5 minutes (300 seconds)
-  // with major markers every 30 seconds
-  const totalDuration = 300; // in seconds
-  const majorMarkerInterval = 30; // in seconds
-  const pixelsPerSecond = 10; // 10px per second
   
   let html = '';
   
+  // Add minor markers every second
   for (let i = 0; i <= totalDuration; i++) {
     const isMajor = i % majorMarkerInterval === 0;
     const markerClass = isMajor ? 'major-marker' : 'minor-marker';
@@ -33,14 +88,68 @@ function generateTimeMarkers(): void {
     
     if (isMajor) {
       // Format time as mm:ss
-      const minutes = Math.floor(i / 60);
-      const seconds = i % 60;
-      const timeText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      html += `<span class="marker-label">${timeText}</span>`;
+      html += `<span class="marker-label">${formatTime(i)}</span>`;
     }
     
     html += '</div>';
   }
   
   rulerElement.innerHTML = html;
+
+  // Add zoom controls
+  const timeline = document.getElementById('timeline');
+  if (timeline) {
+    // Create zoom controls container
+    const zoomControls = document.createElement('div');
+    zoomControls.className = 'zoom-controls';
+    zoomControls.innerHTML = `
+      <button class="zoom-in-button" title="Zoom In">+</button>
+      <button class="zoom-out-button" title="Zoom Out">-</button>
+    `;
+    
+    // Add to timeline
+    timeline.appendChild(zoomControls);
+    
+    // Add event listeners
+    const zoomInButton = zoomControls.querySelector('.zoom-in-button');
+    const zoomOutButton = zoomControls.querySelector('.zoom-out-button');
+    
+    if (zoomInButton && zoomOutButton) {
+      zoomInButton.addEventListener('click', () => {
+        // Increase pixels per second
+        const newPixelsPerSecond = pixelsPerSecond * 1.5;
+        
+        // Recreate timeline with new zoom level
+        createTimeline({
+          pixelsPerSecond: newPixelsPerSecond,
+          totalDuration,
+          majorMarkerInterval
+        });
+        
+        // Dispatch event to notify about zoom change
+        const zoomEvent = new CustomEvent('timeline:zoom', {
+          detail: { pixelsPerSecond: newPixelsPerSecond }
+        });
+        document.dispatchEvent(zoomEvent);
+      });
+      
+      zoomOutButton.addEventListener('click', () => {
+        // Decrease pixels per second, but not below 5
+        const newPixelsPerSecond = Math.max(5, pixelsPerSecond / 1.5);
+        
+        // Recreate timeline with new zoom level
+        createTimeline({
+          pixelsPerSecond: newPixelsPerSecond,
+          totalDuration,
+          majorMarkerInterval
+        });
+        
+        // Dispatch event to notify about zoom change
+        const zoomEvent = new CustomEvent('timeline:zoom', {
+          detail: { pixelsPerSecond: newPixelsPerSecond }
+        });
+        document.dispatchEvent(zoomEvent);
+      });
+    }
+  }
 }

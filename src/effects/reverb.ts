@@ -1,4 +1,4 @@
-import { Effect, EffectType, EffectParameter } from '../models/effect';
+import { Effect, EffectType } from '../models/effect';
 
 export function createReverbEffect(audioContext: AudioContext): Effect {
   const convolver = audioContext.createConvolver();

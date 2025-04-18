@@ -3,7 +3,6 @@ import { createTrackList } from './components/track-list';
 import { createTimeline } from './components/timeline';
 import { showImportDialog, onImportConfirmed } from './components/file-import';
 import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
-import { createAudioFileService } from '../services/audio-file-service';
 
 export function setupUI(): void {
   const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -45,15 +44,11 @@ export function setupUI(): void {
 }
 
 function setupImportHandling(): void {
-  // Get the audio context - this will be accessed when files are imported
-  // The proper way would be to pass this from the audio engine, but for simplicity
-  // we're creating a new instance here
-  const tempAudioContext = new AudioContext();
-  const audioFileService = createAudioFileService(tempAudioContext);
+  // We would normally use the audio engine's context here, but we're delegating to events.ts
   
   onImportConfirmed(async (files) => {
-    // Show loading indicator while processing files
-    const loadingIndicator = showLoadingIndicator();
+    // Show loading while processing files
+    showLoadingIndicator();
     
     try {
       // Get the active track (the last one, for now)

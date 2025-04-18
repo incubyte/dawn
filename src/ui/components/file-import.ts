@@ -81,9 +81,10 @@ export function createImportDialog(): HTMLElement {
     });
     
     // Handle dropped files
-    dropArea.addEventListener('drop', (e: DragEvent) => {
-      if (e.dataTransfer?.files) {
-        handleSelectedFiles(e.dataTransfer.files, dialogContainer);
+    dropArea.addEventListener('drop', (e) => {
+      const dragEvent = e as DragEvent;
+      if (dragEvent.dataTransfer?.files) {
+        handleSelectedFiles(dragEvent.dataTransfer.files, dialogContainer);
       }
     });
     
