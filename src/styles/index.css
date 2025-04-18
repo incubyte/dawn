@@ -93,17 +93,17 @@ body {
   transform: scale(0.95);
 }
 
-#delete-clip-button {
+#delete-clip-button, #delete-track-button {
   background-color: var(--secondary-color);
   color: #e74c3c;
 }
 
-#delete-clip-button:hover {
+#delete-clip-button:hover, #delete-track-button:hover {
   background-color: rgba(231, 76, 60, 0.2);
   color: #e74c3c;
 }
 
-#delete-clip-button:active {
+#delete-clip-button:active, #delete-track-button:active {
   background-color: rgba(231, 76, 60, 0.4);
   transform: scale(0.95);
 }
@@ -364,6 +364,14 @@ body {
   gap: 0.25rem;
   align-items: center;
   margin-bottom: 5px;
+  position: relative; /* For absolute positioning of delete button */
+}
+
+.track-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
 }
 
 .track-name {
@@ -374,6 +382,41 @@ body {
   text-overflow: ellipsis;
   flex-grow: 1;
   color: var(--text-color);
+}
+
+.delete-track-btn {
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0;
+  transition: background-color 0.2s, opacity 0.2s, transform 0.1s;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.track-header:hover .delete-track-btn,
+.track.selected .delete-track-btn {
+  opacity: 1;
+}
+
+.delete-track-btn:hover {
+  background-color: rgba(231, 76, 60, 0.3);
+  transform: scale(1.1);
+}
+
+.delete-track-btn:active {
+  transform: scale(0.95);
 }
 
 .mute-button, .solo-button {

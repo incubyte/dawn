@@ -65,6 +65,16 @@ export function setupEventHandlers(
   // Set up keyboard shortcuts
   setupKeyboardShortcuts();
   
+  // Listen for track deletion events
+  document.addEventListener('track:delete', (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const { trackId } = customEvent.detail;
+    
+    if (trackId) {
+      removeTrack(trackId);
+    }
+  });
+  
   // Transport controls - only apply these if we don't have a reference to the AudioEngine
   // (otherwise, they're handled by transport.ts)
   if (!audioEngine) {
@@ -224,6 +234,7 @@ export function setupEventHandlers(
           <button class="mute-button" title="Mute">M</button>
           <button class="solo-button" title="Solo">S</button>
           <div class="track-name" title="${trackName}">${trackName}</div>
+          <button class="delete-track-btn" title="Delete Track">✕</button>
         </div>
         <div class="track-fader">
           <span class="volume-label">Volume</span>
@@ -241,6 +252,7 @@ export function setupEventHandlers(
       if (
         target.classList.contains('mute-button') || 
         target.classList.contains('solo-button') || 
+        target.classList.contains('delete-track-btn') ||
         target.tagName === 'INPUT'
       ) {
         return;
@@ -284,6 +296,15 @@ export function setupEventHandlers(
         soloButton.classList.toggle('active', isSolo);
         // Add visual feedback
         soloButton.setAttribute('title', isSolo ? 'Unsolo' : 'Solo');
+      });
+    }
+    
+    // Set up delete track button
+    const deleteTrackButton = trackElement.querySelector('.delete-track-btn');
+    if (deleteTrackButton) {
+      deleteTrackButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent bubbling to avoid track selection
+        removeTrack(track.id);
       });
     }
     
@@ -353,6 +374,47 @@ export function setupEventHandlers(
   // Global variable to track selected clip
   let selectedClipId: string | null = null;
   
+  // Function to remove a track
+  function removeTrack(trackId: string) {
+    console.log(`Removing track ${trackId}`);
+    
+    // First check if this track has clips
+    const track = trackService.getAllTracks().find(t => t.id === trackId);
+    const hasClips = track && track.clips.length > 0;
+    
+    // If the track has clips, confirm before deleting
+    if (hasClips) {
+      if (!confirm(`This track contains ${track?.clips.length} clip(s). Are you sure you want to delete it?`)) {
+        console.log('Track deletion cancelled by user');
+        return;
+      }
+    }
+    
+    // Remove from the track service data model
+    trackService.removeTrack(trackId);
+    
+    // Remove from the UI
+    const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+    if (trackElement) {
+      trackElement.remove();
+    }
+    
+    // Clear track selection if this was the selected track
+    if (selectedTrackId === trackId) {
+      selectedTrackId = null;
+      
+      // Automatically select another track if available
+      const firstTrack = document.querySelector('.track');
+      if (firstTrack) {
+        firstTrack.classList.add('selected');
+        selectedTrackId = firstTrack.getAttribute('data-track-id');
+      }
+    }
+    
+    // Update the UI
+    updateTrackWidth();
+  }
+
   // Function to remove a clip
   function removeClip(trackId: string, clipId: string) {
     console.log(`Removing clip ${clipId} from track ${trackId}`);
@@ -378,10 +440,11 @@ export function setupEventHandlers(
   // Function to handle keyboard shortcuts
   function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-      // Only handle if we have a selected clip
-      if (selectedClipId) {
-        // Delete key (Delete or Backspace) to remove the selected clip
-        if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Handle delete key (Delete or Backspace)
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        
+        // First priority: If a clip is selected, delete that
+        if (selectedClipId) {
           const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`);
           if (clipElement) {
             const trackElement = clipElement.closest('.track');
@@ -389,9 +452,15 @@ export function setupEventHandlers(
               const trackId = trackElement.getAttribute('data-track-id');
               if (trackId) {
                 removeClip(trackId, selectedClipId);
+                return; // Exit after handling clip deletion
               }
             }
           }
+        }
+        
+        // Second priority: If a track is selected and no clip is selected, delete the track
+        if (selectedTrackId && !selectedClipId) {
+          removeTrack(selectedTrackId);
         }
       }
     });

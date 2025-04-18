@@ -24,6 +24,9 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
       <button id="delete-clip-button" class="transport-button" title="Delete Selected Clip">
         <span class="icon">🗑️</span>
       </button>
+      <button id="delete-track-button" class="transport-button" title="Delete Selected Track">
+        <span class="icon">🗑️ Track</span>
+      </button>
       <button id="export-button" class="transport-button" title="Export">
         Export
       </button>
@@ -145,6 +148,34 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         }
       } else {
         console.log('No clip selected to delete');
+      }
+    });
+  }
+  
+  // Delete track button
+  const deleteTrackButton = document.getElementById('delete-track-button');
+  if (deleteTrackButton) {
+    deleteTrackButton.addEventListener('click', () => {
+      console.log('Delete track button clicked');
+      
+      // Find the currently selected track
+      const selectedTrack = document.querySelector('.track.selected');
+      if (selectedTrack) {
+        const trackId = selectedTrack.getAttribute('data-track-id');
+        if (trackId) {
+          // Dispatch a custom event for deleting the track
+          const deleteEvent = new CustomEvent('track:delete', {
+            bubbles: true,
+            detail: {
+              trackId,
+              trackElement: selectedTrack
+            }
+          });
+          
+          selectedTrack.dispatchEvent(deleteEvent);
+        }
+      } else {
+        console.log('No track selected to delete');
       }
     });
   }
