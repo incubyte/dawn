@@ -301,7 +301,7 @@ function setupTrimHandlers(
           // Re-render the waveform with the correct portion of the audio buffer
           if (_clip.buffer) {
             const width = parseInt(clipElement.style.width, 10);
-            const waveformElement = clipElement.querySelector('.clip-waveform');
+            const waveformElement = clipElement.querySelector('.clip-waveform') as HTMLElement;
             if (waveformElement) {
               // Re-render the waveform with the trimmed portion of the audio
               // Pass the updated offset and duration to show only the relevant part of the audio
@@ -430,7 +430,7 @@ export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, from
       clipElement.dispatchEvent(trimEvent);
       
       // Look for the buffer to re-render the waveform
-      const waveformElement = clipElement.querySelector('.clip-waveform');
+      const waveformElement = clipElement.querySelector('.clip-waveform') as HTMLElement;
       if (waveformElement) {
         // Find the clip in the track service through the event
         document.dispatchEvent(new CustomEvent('request:clip:buffer', {
