@@ -8,6 +8,35 @@ import { showLoadingIndicator, hideLoadingIndicator, showErrorNotification } fro
 import { AudioEngine } from '../core/audio-engine';
 import { updateTrackWidth, centerViewOnTime } from '../utils/scroll-sync';
 
+// Global variable to track the currently selected track
+let selectedTrackId: string | null = null;
+
+// Function to get the currently selected track ID
+export function getSelectedTrackId(): string | null {
+  return selectedTrackId;
+}
+
+// Function to set the selected track programmatically
+export function setSelectedTrack(trackId: string | null): void {
+  if (trackId === selectedTrackId) return;
+  
+  // Deselect all tracks first
+  document.querySelectorAll('.track').forEach(el => {
+    el.classList.remove('selected');
+  });
+  
+  // Update the selected track ID
+  selectedTrackId = trackId;
+  
+  // If a track ID was provided, find and select that track element
+  if (trackId) {
+    const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+    if (trackElement) {
+      trackElement.classList.add('selected');
+    }
+  }
+}
+
 export function setupEventHandlers(
   audioContext: AudioContext,
   masterGainNode: GainNode,
@@ -61,7 +90,14 @@ export function setupEventHandlers(
   // Add track button
   if (addTrackButton) {
     addTrackButton.addEventListener('click', () => {
+      // Deselect all existing tracks
+      document.querySelectorAll('.track').forEach(el => {
+        el.classList.remove('selected');
+      });
+      
+      // Add new track and select it
       const track = trackService.addTrack();
+      selectedTrackId = track.id; // Set as selected track
       addTrackToUI(track);
     });
   }
@@ -169,6 +205,12 @@ export function setupEventHandlers(
     trackElement.classList.add('track');
     trackElement.dataset.trackId = track.id;
     
+    // If no track is selected yet, select this one as default
+    if (selectedTrackId === null) {
+      selectedTrackId = track.id;
+      trackElement.classList.add('selected');
+    }
+    
     trackElement.innerHTML = `
       <div class="track-header">
         <div class="track-controls">
@@ -181,6 +223,30 @@ export function setupEventHandlers(
       </div>
       <div class="track-clips"></div>
     `;
+    
+    // Add click event to select this track
+    trackElement.addEventListener('click', (e) => {
+      // Don't trigger track selection if clicking on a button or slider
+      const target = e.target as HTMLElement;
+      if (
+        target.classList.contains('mute-button') || 
+        target.classList.contains('solo-button') || 
+        target.tagName === 'INPUT'
+      ) {
+        return;
+      }
+      
+      // Deselect all tracks
+      document.querySelectorAll('.track').forEach(el => {
+        el.classList.remove('selected');
+      });
+      
+      // Select this track
+      trackElement.classList.add('selected');
+      selectedTrackId = track.id;
+      
+      console.log(`Selected track: ${track.id}`);
+    });
     
     tracksContainer.appendChild(trackElement);
     
@@ -302,6 +368,24 @@ export function setupEventHandlers(
       dropZone.addEventListener(eventName, (e) => {
         e.preventDefault();
         e.stopPropagation();
+        
+        // Get parent track
+        const trackElement = dropZone.closest('.track');
+        if (trackElement) {
+          // Select this track when dragging over it
+          if (trackElement.getAttribute('data-track-id') !== selectedTrackId) {
+            // Deselect all tracks
+            document.querySelectorAll('.track').forEach(el => {
+              el.classList.remove('selected');
+            });
+            
+            // Select this track
+            trackElement.classList.add('selected');
+            selectedTrackId = trackElement.getAttribute('data-track-id');
+            console.log(`Selected track for drop: ${selectedTrackId}`);
+          }
+        }
+        
         dropZone.classList.add('drag-highlight');
       });
     });

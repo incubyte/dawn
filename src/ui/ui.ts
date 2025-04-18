@@ -4,6 +4,7 @@ import { createTimeline } from './components/timeline';
 import { showImportDialog, onImportConfirmed } from './components/file-import';
 import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
 import { AudioEngine } from '../core/audio-engine';
+import { getSelectedTrackId } from './events';
 
 export function setupUI(audioEngine?: AudioEngine): void {
   const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -52,14 +53,29 @@ function setupImportHandling(_audioEngine?: AudioEngine): void {
     showLoadingIndicator();
     
     try {
-      // Get the active track (the last one, for now)
-      const tracks = document.querySelectorAll('.track');
-      if (tracks.length === 0) {
-        alert('No tracks available. Please add a track first.');
+      // Check if we have a selected track
+      const selectedTrack = document.querySelector('.track.selected');
+      
+      if (!selectedTrack) {
+        // If no track is selected, check if any tracks exist
+        const tracks = document.querySelectorAll('.track');
+        if (tracks.length === 0) {
+          alert('No tracks available. Please add a track first.');
+          return;
+        }
+        
+        // If tracks exist but none are selected, select the first one
+        tracks[0].classList.add('selected');
+        // This will be used for this import only - the selection isn't stored in the events.ts selectedTrackId
+      }
+      
+      // Get the selected track (which now should exist)
+      const activeTrack = document.querySelector('.track.selected') || document.querySelector('.track');
+      if (!activeTrack) {
+        alert('No track available to import to. Please add a track first.');
         return;
       }
       
-      const activeTrack = tracks[tracks.length - 1];
       const trackId = activeTrack.getAttribute('data-track-id');
       if (!trackId) return;
       

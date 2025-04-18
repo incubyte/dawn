@@ -17,13 +17,22 @@
         console.error('Unhandled promise rejection:', e.reason);
       });
     </script>
+    <!-- Enable SharedArrayBuffer support, needed for mpg123-decoder -->
+    <script>
+      // Check for SharedArrayBuffer support
+      if (typeof SharedArrayBuffer === 'undefined') {
+        console.warn('SharedArrayBuffer is not supported in this browser. MP3 decoding may not work correctly.');
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
-    <div id="audio-debug" style="display: none; position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+    <div id="audio-debug" style="display: none; position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 80vh; overflow-y: auto; z-index: 9999;">
       <div>Audio Context State: <span id="audio-context-state">unknown</span></div>
       <div>Active Sources: <span id="active-sources-count">0</span></div>
+      <div>MP3 Decoder: <span id="mp3-decoder-status">checking...</span></div>
       <button id="debug-test-tone" style="margin-top: 5px;">Play Test Tone</button>
+      <button id="debug-resume-audio" style="margin-top: 5px;">Resume Audio Context</button>
       <label style="display: block; margin-top: 5px;">
         <input type="checkbox" id="show-debug-logs" />
         Show Debug Panel

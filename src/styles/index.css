@@ -302,6 +302,22 @@ body {
   height: 80px;
   min-width: max-content; /* Ensure track expands to contain all clips */
   position: relative;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+/* Selected track styling */
+.track.selected {
+  background-color: rgba(0, 120, 215, 0.1);
+  border-left: 3px solid var(--primary-color);
+}
+
+.track.selected .track-header {
+  background-color: rgba(0, 120, 215, 0.2);
+}
+
+.track.selected .track-clips {
+  background-color: rgba(50, 50, 50, 0.7);
 }
 
 .track-header {

@@ -33,6 +33,45 @@ export function setupAudioDebug(engine: any): void {
     debugPanel.style.display = showDebugLogsCheckbox.checked ? 'block' : 'none';
   });
   
+  // Add Resume Audio Context button functionality
+  const resumeAudioButton = document.getElementById('debug-resume-audio');
+  if (resumeAudioButton) {
+    resumeAudioButton.addEventListener('click', async () => {
+      if (!audioEngine || !audioEngine.audioContext) {
+        console.error('Audio engine or audio context not available');
+        return;
+      }
+      
+      try {
+        console.log('Manually resuming audio context...');
+        await audioEngine.audioContext.resume();
+        console.log('Audio context resumed manually');
+        updateDebugInfo();
+        // Add visual feedback
+        resumeAudioButton.textContent = 'Audio Context Resumed';
+        resumeAudioButton.style.backgroundColor = '#4CAF50';
+        setTimeout(() => {
+          resumeAudioButton.textContent = 'Resume Audio Context';
+          resumeAudioButton.style.backgroundColor = '';
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to resume audio context:', error);
+        resumeAudioButton.textContent = 'Resume Failed';
+        resumeAudioButton.style.backgroundColor = '#F44336';
+        setTimeout(() => {
+          resumeAudioButton.textContent = 'Resume Audio Context';
+          resumeAudioButton.style.backgroundColor = '';
+        }, 2000);
+      }
+    });
+  }
+  
+  // Add MP3 decoder status check
+  const mp3DecoderStatus = document.getElementById('mp3-decoder-status');
+  if (mp3DecoderStatus) {
+    checkMP3DecoderStatus(mp3DecoderStatus);
+  }
+  
   // Add a track info section
   const trackInfo = document.createElement('div');
   trackInfo.innerHTML = '<div style="margin-top: 10px;">Track Info: <span id="track-count">0</span> tracks, <span id="clip-count">0</span> clips</div>';
@@ -241,6 +280,54 @@ export function setupAudioDebug(engine: any): void {
       console.log('Test tone started successfully');
     } catch (error) {
       console.error('Error generating test tone:', error);
+    }
+  }
+  
+  // Function to check MP3 decoder status
+  async function checkMP3DecoderStatus(statusElement: HTMLElement) {
+    try {
+      statusElement.textContent = 'Checking...';
+      statusElement.style.color = 'yellow';
+      
+      // Check for SharedArrayBuffer support first (required for most WASM-based decoders)
+      if (typeof SharedArrayBuffer === 'undefined') {
+        statusElement.textContent = 'SharedArrayBuffer not supported';
+        statusElement.style.color = 'orange';
+        return;
+      }
+      
+      try {
+        // Try to import the decoder
+        const { MPEGDecoder } = await import('mpg123-decoder');
+        
+        if (typeof MPEGDecoder !== 'function') {
+          statusElement.textContent = 'Import failed (not a constructor)';
+          statusElement.style.color = 'red';
+          return;
+        }
+        
+        // Try to instantiate it
+        statusElement.textContent = 'Initializing...';
+        const decoder = new MPEGDecoder();
+        
+        // Wait for the decoder to be ready
+        await decoder.ready;
+        
+        // Success!
+        statusElement.textContent = 'Ready';
+        statusElement.style.color = '#4CAF50';
+        
+        // Clean up
+        decoder.free();
+      } catch (error) {
+        console.error('MP3 decoder initialization failed:', error);
+        statusElement.textContent = 'Failed: ' + (error instanceof Error ? error.message : String(error));
+        statusElement.style.color = 'red';
+      }
+    } catch (error) {
+      console.error('Error checking MP3 decoder status:', error);
+      statusElement.textContent = 'Error checking';
+      statusElement.style.color = 'red';
     }
   }
 }

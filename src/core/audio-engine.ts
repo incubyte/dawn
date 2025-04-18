@@ -167,10 +167,21 @@ export function setupAudioEngine(): AudioEngine {
         
         // For each clip in the track
         track.clips.forEach(clip => {
+          // Detailed validation and debugging for clip
+          console.log(`Processing clip: ${clip.id}, name: ${clip.name}`);
+          
           if (!clip.buffer) {
             console.log(`Clip ${clip.id} has no buffer, skipping`);
             return;
           }
+          
+          // Validate that the buffer is actually valid
+          if (clip.buffer.length === 0 || clip.buffer.numberOfChannels === 0) {
+            console.error(`Clip ${clip.id} has an empty/invalid buffer (duration: ${clip.buffer.duration}s, channels: ${clip.buffer.numberOfChannels}), skipping`);
+            return;
+          }
+          
+          console.log(`Clip ${clip.id} buffer details: duration=${clip.buffer.duration}s, channels=${clip.buffer.numberOfChannels}, sample rate=${clip.buffer.sampleRate}Hz`);
           
           // Calculate whether this clip should play now
           const clipStartTime = clip.startTime;
@@ -186,46 +197,66 @@ export function setupAudioEngine(): AudioEngine {
           
           hasClips = true;
           
-          // Create a buffer source for this clip
-          const source = audioContext.createBufferSource();
-          source.buffer = clip.buffer;
-          
-          // Connect to the track's gain node
-          source.connect(trackGainNode);
-          
-          // Calculate when this clip should start in context time
-          let startDelay = clipStartTime - playbackOffset;
-          if (startDelay < 0) {
-            // We're starting in the middle of this clip
-            const offset = -startDelay;
-            const duration = clip.duration - offset;
+          try {
+            // Create a buffer source for this clip
+            const source = audioContext.createBufferSource();
             
-            // Only play if there's still something left to play
-            if (duration <= 0) {
-              console.log(`Clip ${clip.id} has no duration left to play, skipping`);
-              return;
+            // Set the buffer
+            source.buffer = clip.buffer;
+            
+            // Make sure AudioContext is running
+            if (audioContext.state !== 'running') {
+              console.log(`AudioContext is not running (state: ${audioContext.state}), attempting to resume...`);
+              audioContext.resume().catch(err => console.error('Failed to resume AudioContext:', err));
             }
             
-            console.log(`Starting clip ${clip.id} immediately at offset ${offset}s, duration ${duration}s`);
-            try {
-              source.start(0, offset, duration);
-              console.log(`Clip ${clip.id} started successfully`);
-            } catch (error) {
-              console.error(`Error starting clip ${clip.id}:`, error);
+            // Connect to the track's gain node
+            source.connect(trackGainNode);
+            console.log(`Clip ${clip.id} source connected to gain node`);
+            
+            // Calculate when this clip should start in context time
+            let startDelay = clipStartTime - playbackOffset;
+            if (startDelay < 0) {
+              // We're starting in the middle of this clip
+              const offset = -startDelay;
+              const duration = clip.duration - offset;
+              
+              // Only play if there's still something left to play
+              if (duration <= 0) {
+                console.log(`Clip ${clip.id} has no duration left to play, skipping`);
+                return;
+              }
+              
+              console.log(`Starting clip ${clip.id} immediately at offset ${offset}s, duration ${duration}s`);
+              try {
+                // Make sure offset is within the buffer's duration
+                const safeOffset = Math.min(offset, clip.buffer.duration);
+                const safeDuration = Math.min(duration, clip.buffer.duration - safeOffset);
+                
+                source.start(0, safeOffset, safeDuration);
+                console.log(`Clip ${clip.id} started successfully`);
+              } catch (error) {
+                console.error(`Error starting clip ${clip.id}:`, error);
+              }
+            } else {
+              // This clip starts in the future
+              console.log(`Scheduling clip ${clip.id} to start in ${startDelay}s (at ${audioContext.currentTime + startDelay}s context time), duration ${clip.duration}s`);
+              try {
+                // Make sure duration is within the buffer's duration
+                const safeDuration = Math.min(clip.duration, clip.buffer.duration);
+                
+                source.start(audioContext.currentTime + startDelay, 0, safeDuration);
+                console.log(`Clip ${clip.id} scheduled successfully`);
+              } catch (error) {
+                console.error(`Error scheduling clip ${clip.id}:`, error);
+              }
             }
-          } else {
-            // This clip starts in the future
-            console.log(`Scheduling clip ${clip.id} to start in ${startDelay}s (at ${audioContext.currentTime + startDelay}s context time), duration ${clip.duration}s`);
-            try {
-              source.start(audioContext.currentTime + startDelay, 0, clip.duration);
-              console.log(`Clip ${clip.id} scheduled successfully`);
-            } catch (error) {
-              console.error(`Error scheduling clip ${clip.id}:`, error);
-            }
+            
+            // Keep track of this source for stopping later
+            activeSources.push(source);
+          } catch (error) {
+            console.error(`Error setting up clip ${clip.id}:`, error);
           }
-          
-          // Keep track of this source for stopping later
-          activeSources.push(source);
         });
       });
       

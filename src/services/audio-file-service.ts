@@ -39,18 +39,54 @@ export function createAudioFileService(audioContext: AudioContext): AudioFileSer
         // Ensure the audio context is running
         if (audioContext.state === 'suspended') {
           console.log('Resuming audio context for decoding');
-          await audioContext.resume();
+          try {
+            await audioContext.resume();
+            console.log('Audio context resumed successfully');
+          } catch (resumeError) {
+            console.error('Failed to resume audio context:', resumeError);
+            // Continue anyway - decodeAudioData will try again if needed
+          }
         }
+        
+        console.log(`Audio context state: ${audioContext.state}`);
         
         // Read the file as an ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
         console.log(`File loaded as ArrayBuffer, size: ${arrayBuffer.byteLength} bytes`);
         
+        if (arrayBuffer.byteLength === 0) {
+          throw new Error('File is empty (0 bytes)');
+        }
+        
         // Try to decode the audio using enhanced decoder with fallbacks
         try {
           // Use our custom decoder with fallbacks for different formats
+          console.log('Sending to decodeAudioData...');
           const audioBuffer = await decodeAudioData(arrayBuffer, file, audioContext);
+          
+          // Validate the resulting audio buffer
+          if (!audioBuffer || audioBuffer.length === 0 || audioBuffer.numberOfChannels === 0) {
+            throw new Error('Decoder returned an invalid or empty AudioBuffer');
+          }
+          
           console.log(`Audio decoded successfully: ${audioBuffer.duration}s, ${audioBuffer.numberOfChannels} channels, ${audioBuffer.sampleRate}Hz`);
+          
+          // Additional test - check that the buffer contains actual audio data
+          const channelData = audioBuffer.getChannelData(0);
+          let hasAudioData = false;
+          
+          // Check the first 1000 samples (or all if fewer) to see if any are non-zero
+          for (let i = 0; i < Math.min(1000, channelData.length); i++) {
+            if (channelData[i] !== 0) {
+              hasAudioData = true;
+              break;
+            }
+          }
+          
+          if (!hasAudioData) {
+            console.warn('AudioBuffer may contain silent audio (all zeros in sample check)');
+          }
+          
           return audioBuffer;
         } catch (decodeError: any) {
           console.error('Error decoding audio data:', decodeError);
