@@ -598,6 +598,19 @@ body {
   cursor: grabbing;
 }
 
+/* Styles for clips being dragged within a track */
+.audio-clip.drag-potential {
+  cursor: grabbing !important;
+}
+
+.audio-clip.dragging-within-track {
+  opacity: 0.8;
+  transform: scale(1.02);
+  z-index: 10;
+  cursor: grabbing !important;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
 /* Animation for clips moved between tracks */
 .audio-clip.moved {
   animation: moved-clip-animation 0.5s ease;
@@ -607,6 +620,17 @@ body {
   0% { transform: scale(0.95); background-color: var(--primary-color); }
   50% { transform: scale(1.05); background-color: #4caf50; }
   100% { transform: scale(1); background-color: var(--primary-color); }
+}
+
+/* Animation for clips moved within a track */
+.audio-clip.moved-within-track {
+  animation: moved-within-track-animation 0.3s ease;
+}
+
+@keyframes moved-within-track-animation {
+  0% { background-color: var(--primary-color); }
+  50% { background-color: #f39c12; }
+  100% { background-color: var(--primary-color); }
 }
 
 /* Add visual cue to indicate draggable functionality */

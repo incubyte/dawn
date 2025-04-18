@@ -3,7 +3,7 @@ import { AudioClip } from '../models/audio-clip';
 import { Effect } from '../models/effect';
 
 export interface TrackService {
-  addTrack(): AudioTrack;
+  addTrack(trackId?: string): AudioTrack;
   removeTrack(trackId: string): void;
   addClipToTrack(trackId: string, clip: AudioClip): void;
   removeClipFromTrack(trackId: string, clipId: string): void;
@@ -28,8 +28,8 @@ export function createTrackService(
   const trackNodes: Map<string, { gainNode: GainNode, source?: AudioBufferSourceNode }> = new Map();
   
   return {
-    addTrack(): AudioTrack {
-      const id = crypto.randomUUID();
+    addTrack(trackId?: string): AudioTrack {
+      const id = trackId || crypto.randomUUID();
       
       // Create track gain node
       const gainNode = audioContext.createGain();

@@ -70,6 +70,12 @@ export function setupScrollSync(): void {
     }
   });
   
+  // Listen for track width update requests (used after loading a project)
+  document.addEventListener('updateTrackWidth', () => {
+    console.log('Received updateTrackWidth event, recalculating track widths');
+    updateTrackWidth();
+  });
+  
   // Initial width calculation
   updateTrackWidth();
   

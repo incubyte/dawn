@@ -36,6 +36,12 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
       <button id="delete-track-button" class="transport-button" title="Delete Selected Track">
         <span class="icon">🗑️ Track</span>
       </button>
+      <button id="save-button" class="transport-button" title="Save Project">
+        Save
+      </button>
+      <button id="load-button" class="transport-button" title="Load Project">
+        Load
+      </button>
       <button id="export-button" class="transport-button" title="Export">
         Export
       </button>
@@ -60,6 +66,8 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   const trimInfoButton = document.getElementById('trim-info-button');
   const deleteClipButton = document.getElementById('delete-clip-button');
   const deleteTrackButton = document.getElementById('delete-track-button');
+  const saveButton = document.getElementById('save-button');
+  const loadButton = document.getElementById('load-button');
   const exportButton = document.getElementById('export-button');
   
   if (playButton && audioEngine) {
@@ -255,6 +263,210 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         }
       } else {
         console.log('No track selected to delete');
+      }
+    });
+  }
+  
+  // Save project button
+  if (saveButton && audioEngine) {
+    saveButton.addEventListener('click', async () => {
+      console.log('Save button clicked');
+      
+      try {
+        // Show a dialog to let the user enter a project name
+        const projectName = prompt('Enter a name for your project:', 'My Project');
+        if (!projectName) {
+          console.log('Save cancelled - no project name provided');
+          return;
+        }
+        
+        // Show saving message
+        saveButton.textContent = 'Saving...';
+        (saveButton as HTMLButtonElement).disabled = true;
+        
+        // Use the project service to save the project
+        const projectBlob = await audioEngine.saveProject(projectName);
+        
+        // Create download link
+        const url = URL.createObjectURL(projectBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${projectName}.dawn.zip`;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          // Reset button
+          saveButton.textContent = 'Save';
+          (saveButton as HTMLButtonElement).disabled = false;
+          
+          // Show success notification
+          const notification = document.createElement('div');
+          notification.className = 'toast-notification';
+          notification.textContent = 'Project saved successfully';
+          document.body.appendChild(notification);
+          
+          // Show and then hide the notification
+          setTimeout(() => {
+            notification.classList.add('visible');
+            setTimeout(() => {
+              notification.classList.remove('visible');
+              setTimeout(() => {
+                document.body.removeChild(notification);
+              }, 300); // Wait for fade-out animation
+            }, 1500); // Show for 1.5 seconds
+          }, 10);
+        }, 100);
+      } catch (error) {
+        console.error('Error saving project:', error);
+        
+        // Reset button
+        saveButton.textContent = 'Save Failed';
+        
+        // Show error notification
+        const notification = document.createElement('div');
+        notification.className = 'toast-notification';
+        notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+        notification.textContent = 'Failed to save project';
+        document.body.appendChild(notification);
+        
+        // Show and then hide the notification
+        setTimeout(() => {
+          notification.classList.add('visible');
+          setTimeout(() => {
+            notification.classList.remove('visible');
+            setTimeout(() => {
+              document.body.removeChild(notification);
+              
+              // Reset button after delay
+              saveButton.textContent = 'Save';
+              (saveButton as HTMLButtonElement).disabled = false;
+            }, 300); // Wait for fade-out animation
+          }, 1500); // Show for 1.5 seconds
+        }, 10);
+      }
+    });
+  }
+  
+  // Load project button
+  if (loadButton && audioEngine) {
+    loadButton.addEventListener('click', async () => {
+      console.log('Load button clicked');
+      
+      try {
+        // Create a file input element
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.dawn.zip,.zip';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+        
+        // Handle file selection
+        fileInput.addEventListener('change', async () => {
+          if (fileInput.files && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            console.log(`Selected file: ${file.name}`);
+            
+            // Show loading message
+            loadButton.textContent = 'Loading...';
+            (loadButton as HTMLButtonElement).disabled = true;
+            
+            try {
+              // Load the project
+              console.log('Starting project load...');
+              const success = await audioEngine.loadProject(file);
+              console.log(`Project load result: ${success ? 'success' : 'failure'}`);
+              
+              // Force update track width and UI after loading
+              setTimeout(() => {
+                console.log('Triggering UI update after project load');
+                document.dispatchEvent(new CustomEvent('updateTrackWidth'));
+              }, 500);
+              
+              if (success) {
+                console.log('Project loaded successfully');
+                
+                // Show success notification
+                const notification = document.createElement('div');
+                notification.className = 'toast-notification';
+                notification.textContent = 'Project loaded successfully';
+                document.body.appendChild(notification);
+                
+                // Show and then hide the notification
+                setTimeout(() => {
+                  notification.classList.add('visible');
+                  setTimeout(() => {
+                    notification.classList.remove('visible');
+                    setTimeout(() => {
+                      document.body.removeChild(notification);
+                    }, 300); // Wait for fade-out animation
+                  }, 1500); // Show for 1.5 seconds
+                }, 10);
+              } else {
+                console.error('Failed to load project');
+                
+                // Show error notification
+                const notification = document.createElement('div');
+                notification.className = 'toast-notification';
+                notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+                notification.textContent = 'Failed to load project';
+                document.body.appendChild(notification);
+                
+                // Show and then hide the notification
+                setTimeout(() => {
+                  notification.classList.add('visible');
+                  setTimeout(() => {
+                    notification.classList.remove('visible');
+                    setTimeout(() => {
+                      document.body.removeChild(notification);
+                    }, 300); // Wait for fade-out animation
+                  }, 1500); // Show for 1.5 seconds
+                }, 10);
+              }
+            } catch (error) {
+              console.error('Error loading project:', error);
+              
+              // Show error notification
+              const notification = document.createElement('div');
+              notification.className = 'toast-notification';
+              notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+              notification.textContent = 'Error loading project';
+              document.body.appendChild(notification);
+              
+              // Show and then hide the notification
+              setTimeout(() => {
+                notification.classList.add('visible');
+                setTimeout(() => {
+                  notification.classList.remove('visible');
+                  setTimeout(() => {
+                    document.body.removeChild(notification);
+                  }, 300); // Wait for fade-out animation
+                }, 1500); // Show for 1.5 seconds
+              }, 10);
+            } finally {
+              // Reset button
+              loadButton.textContent = 'Load';
+              (loadButton as HTMLButtonElement).disabled = false;
+            }
+          }
+          
+          // Clean up
+          document.body.removeChild(fileInput);
+        });
+        
+        // Trigger the file dialog
+        fileInput.click();
+      } catch (error) {
+        console.error('Error setting up file input:', error);
+        
+        // Reset button
+        loadButton.textContent = 'Load';
+        (loadButton as HTMLButtonElement).disabled = false;
       }
     });
   }

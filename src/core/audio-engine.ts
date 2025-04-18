@@ -1,10 +1,12 @@
 import { createAudioFileService } from '../services/audio-file-service';
 import { createTrackService, TrackService } from '../services/track-service';
+import { createProjectService, ProjectService } from '../services/project-service';
 
 export interface AudioEngine {
   audioContext: AudioContext;
   masterGainNode: GainNode;
   trackService: TrackService;
+  projectService: ProjectService;
   masterGain: number;
   isPlaying: boolean;
   currentTime: number;
@@ -14,6 +16,8 @@ export interface AudioEngine {
   pausePlayback(): void;
   seekTo(time: number): void;
   exportMix(): Promise<Blob>;
+  saveProject(name: string): Promise<Blob>;
+  loadProject(file: File): Promise<boolean>;
 }
 
 export function setupAudioEngine(): AudioEngine {
@@ -30,6 +34,9 @@ export function setupAudioEngine(): AudioEngine {
   // Create audio file service
   const audioFileService = createAudioFileService(audioContext);
   
+  // Create project service
+  const projectService = createProjectService(audioContext, trackService);
+  
   // Track playback state
   let isPlaying = false;
   let playbackStartTime = 0;
@@ -42,6 +49,7 @@ export function setupAudioEngine(): AudioEngine {
     audioContext,
     masterGainNode,
     trackService,
+    projectService,
     _activeSources: activeSources,
     
     get isPlaying(): boolean {
@@ -459,6 +467,76 @@ export function setupAudioEngine(): AudioEngine {
       
       // Use the audio file service to create a WAV blob
       return audioFileService.exportAudioBuffer(renderedBuffer, 'daw-export.wav');
+    },
+    
+    /**
+     * Save the current project to a file
+     */
+    async saveProject(name: string): Promise<Blob> {
+      console.log(`Saving project: ${name}`);
+      
+      // First check if we're currently playing and pause if needed
+      const wasPlaying = isPlaying;
+      if (isPlaying) {
+        this.pausePlayback();
+      }
+      
+      try {
+        // Use the project service to save the project
+        const projectBlob = await projectService.saveProject(name);
+        
+        // If the project was playing, resume playback
+        if (wasPlaying) {
+          this.startPlayback();
+        }
+        
+        return projectBlob;
+      } catch (error) {
+        console.error('Error saving project:', error);
+        
+        // If the project was playing, try to resume playback
+        if (wasPlaying) {
+          try {
+            this.startPlayback();
+          } catch (resumeError) {
+            console.error('Error resuming playback after save error:', resumeError);
+          }
+        }
+        
+        throw error;
+      }
+    },
+    
+    /**
+     * Load a project from a file
+     */
+    async loadProject(file: File): Promise<boolean> {
+      console.log(`Loading project from file: ${file.name}`);
+      
+      // First check if we're currently playing and stop if needed
+      if (isPlaying) {
+        this.stopPlayback();
+      }
+      
+      try {
+        // Use the project service to load the project
+        const result = await projectService.loadProject(file);
+        
+        if (result) {
+          console.log('Project loaded successfully');
+          
+          // Update track widths and other UI elements
+          document.dispatchEvent(new CustomEvent('updateTrackWidth'));
+          
+          return true;
+        } else {
+          console.error('Failed to load project');
+          return false;
+        }
+      } catch (error) {
+        console.error('Error loading project:', error);
+        return false;
+      }
     }
   };
 }
