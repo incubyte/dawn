@@ -328,6 +328,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  position: relative; /* For proper positioning of volume slider */
 }
 
 .track-clips {
@@ -342,17 +343,35 @@ body {
 .track-controls {
   display: flex;
   gap: 0.25rem;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.track-name {
+  margin-left: 5px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+  color: var(--text-color);
 }
 
 .mute-button, .solo-button {
   width: 30px;
   height: 30px;
+  min-width: 30px; /* Ensure buttons don't shrink */
   border: 1px solid var(--border-color);
   background-color: var(--secondary-color);
   color: var(--text-color);
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.9rem;
 }
 
 .mute-button:hover, .solo-button:hover {
@@ -369,34 +388,70 @@ body {
 }
 
 .track-fader {
-  margin-top: 0.5rem;
+  margin-top: auto; /* Push to bottom of track header */
+  position: relative;
+  height: 30px;
+  display: flex;
+  align-items: center;
+}
+
+.volume-label {
+  position: absolute;
+  right: 0;
+  top: -15px;
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 .gain-slider {
   width: 100%;
   -webkit-appearance: none;
-  height: 5px;
-  border-radius: 2.5px;
+  height: 8px;
+  border-radius: 4px;
   background: var(--border-color);
   outline: none;
+  margin: 0;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .gain-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--primary-color);
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border: 2px solid var(--text-color);
 }
 
 .gain-slider::-moz-range-thumb {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--primary-color);
   cursor: pointer;
-  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border: 2px solid var(--text-color);
+}
+
+/* Show the current value of volume when adjusting */
+.gain-slider:hover + .volume-display,
+.gain-slider:focus + .volume-display {
+  opacity: 1;
+}
+
+.volume-display {
+  position: absolute;
+  right: -35px;
+  top: 5px;
+  background-color: var(--secondary-color);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
 }
 
 /* Audio Clip */

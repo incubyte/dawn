@@ -211,14 +211,21 @@ export function setupEventHandlers(
       trackElement.classList.add('selected');
     }
     
+    // Create a track name using "Track X" format
+    const trackCount = document.querySelectorAll('.track').length + 1;
+    const trackName = `Track ${trackCount}`;
+    
     trackElement.innerHTML = `
       <div class="track-header">
         <div class="track-controls">
           <button class="mute-button" title="Mute">M</button>
           <button class="solo-button" title="Solo">S</button>
+          <div class="track-name" title="${trackName}">${trackName}</div>
         </div>
         <div class="track-fader">
-          <input type="range" min="0" max="1" step="0.01" value="1" class="gain-slider">
+          <span class="volume-label">Volume</span>
+          <input type="range" min="0" max="1" step="0.01" value="1" class="gain-slider" title="Volume">
+          <span class="volume-display">100%</span>
         </div>
       </div>
       <div class="track-clips"></div>
@@ -267,10 +274,41 @@ export function setupEventHandlers(
       });
     }
     
+    // Set up volume slider with visual feedback
     const gainSlider = trackElement.querySelector('.gain-slider') as HTMLInputElement;
-    if (gainSlider) {
+    const volumeDisplay = trackElement.querySelector('.volume-display') as HTMLElement;
+    
+    if (gainSlider && volumeDisplay) {
+      // Update volume display when slider changes
       gainSlider.addEventListener('input', () => {
-        track.gainValue = parseFloat(gainSlider.value);
+        const volume = parseFloat(gainSlider.value);
+        track.gainValue = volume;
+        
+        // Update the volume display with percentage
+        const volumePercent = Math.round(volume * 100);
+        volumeDisplay.textContent = `${volumePercent}%`;
+        
+        // Change color based on volume level
+        if (volumePercent > 90) {
+          volumeDisplay.style.color = '#e74c3c'; // Red for high volumes
+        } else if (volumePercent > 70) {
+          volumeDisplay.style.color = '#f39c12'; // Orange for medium-high volumes
+        } else {
+          volumeDisplay.style.color = '#fff'; // White for normal volumes
+        }
+      });
+      
+      // Show volume on hover
+      gainSlider.addEventListener('mouseover', () => {
+        volumeDisplay.style.opacity = '1';
+      });
+      
+      // Hide volume when mouse leaves
+      gainSlider.addEventListener('mouseleave', () => {
+        // Small delay before hiding
+        setTimeout(() => {
+          volumeDisplay.style.opacity = '0';
+        }, 500);
       });
     }
     
