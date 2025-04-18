@@ -16,7 +16,7 @@ export async function decodeMP3(arrayBuffer: ArrayBuffer, audioContext: AudioCon
     console.log('Attempting to decode MP3 using mpg123-decoder');
     
     if (!hasLoggedDecoderInfo) {
-      console.log('MPEGDecoder version:', MPEGDecoder.version);
+      console.log('MPEGDecoder initialized');
       hasLoggedDecoderInfo = true;
     }
     

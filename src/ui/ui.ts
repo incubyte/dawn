@@ -4,7 +4,6 @@ import { createTimeline } from './components/timeline';
 import { showImportDialog, onImportConfirmed } from './components/file-import';
 import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
 import { AudioEngine } from '../core/audio-engine';
-import { getSelectedTrackId } from './events';
 
 export function setupUI(audioEngine?: AudioEngine): void {
   const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -40,8 +39,8 @@ export function setupUI(audioEngine?: AudioEngine): void {
       showImportDialog();
     });
   }
-  
-  // Setup file import handling
+
+// Setup file import handling
   setupImportHandling(audioEngine);
 }
 
