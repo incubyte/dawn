@@ -1,4 +1,4 @@
-import { AudioEngine } from '../../core/audio-engine';
+// No imports needed
 
 // Define storage provider types
 export type StorageProvider = 'local' | null;
@@ -11,7 +11,6 @@ interface StorageOption {
   icon: string;
   enabled: boolean;
 }
-
 // Interface to store app settings
 export interface AppSettings {
   storageProvider: StorageProvider;
@@ -24,8 +23,7 @@ export const appSettings: AppSettings = {
 
 // Function to create the welcome screen
 export function createWelcomeScreen(
-  onComplete: (action: 'new' | 'load', storageProvider: StorageProvider) => void,
-  audioEngine?: AudioEngine
+  onComplete: (action: 'new' | 'load', storageProvider: StorageProvider) => void
 ): HTMLElement {
   const welcomeContainer = document.createElement('div');
   welcomeContainer.className = 'welcome-screen';
@@ -116,16 +114,13 @@ export function createWelcomeScreen(
     if (localStorageRadio) {
       localStorageRadio.checked = true;
     }
-    
   }, 0);
   
   return welcomeContainer;
 }
 
-// Since we've removed GitHub integration, we don't need these helper functions
-
-// Helper function to show an error message
-function showError(message: string): void {
+// Helper function to show an error message (kept for potential future use)
+/* function showError(message: string): void {
   console.error('Welcome screen error:', message);
   
   // Remove any existing error messages
@@ -158,31 +153,18 @@ function showError(message: string): void {
     });
   }
   
-  // Show the error with longer display time for GitHub errors
+  // Show the error
   setTimeout(() => {
     errorElement.classList.add('visible');
     
-    // Automatically remove after a delay if not manually closed
-    if (message.includes('GitHub') || message.includes('token') || message.includes('repository')) {
-      // Longer delay for GitHub-related errors (5 seconds)
+    // Standard delay for errors (3 seconds)
+    setTimeout(() => {
+      errorElement.classList.remove('visible');
       setTimeout(() => {
-        errorElement.classList.remove('visible');
-        setTimeout(() => {
-          if (document.body.contains(errorElement)) {
-            document.body.removeChild(errorElement);
-          }
-        }, 300);
-      }, 5000);
-    } else {
-      // Standard delay for other errors (3 seconds)
-      setTimeout(() => {
-        errorElement.classList.remove('visible');
-        setTimeout(() => {
-          if (document.body.contains(errorElement)) {
-            document.body.removeChild(errorElement);
-          }
-        }, 300);
-      }, 3000);
-    }
+        if (document.body.contains(errorElement)) {
+          document.body.removeChild(errorElement);
+        }
+      }, 300);
+    }, 3000);
   }, 10);
-}
+} */

@@ -1,7 +1,5 @@
-import { AudioTrack } from '../models/audio-track';
 import { AudioClip } from '../models/audio-clip';
 import { TrackService } from './track-service';
-import { createAudioFileService } from './audio-file-service';
 import JSZip from 'jszip';
 
 // Define a serializable project format
@@ -46,7 +44,6 @@ export function createProjectService(
   let currentProjectName: string | null = null;
   let originalFileName: string | null = null;
   let lastSavedState: string | null = null;
-  const audioFileService = createAudioFileService(audioContext);
   
   // Function to update the last saved state
   const updateLastSavedState = async () => {

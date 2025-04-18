@@ -334,66 +334,65 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         saveButton.textContent = 'Saving...';
         (saveButton as HTMLButtonElement).disabled = true;
         
-        try {
-          // For a loaded project, show a more informative confirmation dialog
-          if (originalFileName) {
-            // For better UX, let's show a modal explaining the browser limitation
-            const confirmDialog = document.createElement('div');
-            confirmDialog.className = 'confirmation-dialog';
-            confirmDialog.innerHTML = `
-              <div class="confirmation-content">
-                <h2>Save Project</h2>
-                <p>Your project "${currentProjectName}" will be saved as an updated version.</p>
-                <p><strong>Important:</strong> Due to browser security, this will download a new file "${originalFileName}" 
-                that will replace your previous version.</p>
-                <p>To update your project, simply save this file in the same location as the original.</p>
-                <div class="confirmation-buttons">
-                  <button id="confirm-save">Save</button>
-                  <button id="cancel-save">Cancel</button>
-                </div>
+        if (originalFileName) {
+          // Local storage with existing file - show browser limitation explanation
+          const confirmDialog = document.createElement('div');
+          confirmDialog.className = 'confirmation-dialog';
+          confirmDialog.innerHTML = `
+            <div class="confirmation-content">
+              <h2>Save Project</h2>
+              <p>Your project "${currentProjectName}" will be saved as an updated version.</p>
+              <p><strong>Important:</strong> Due to browser security, this will download a new file "${originalFileName}" 
+              that will replace your previous version.</p>
+              <p>To update your project, simply save this file in the same location as the original.</p>
+              <div class="confirmation-buttons">
+                <button id="confirm-save">Save</button>
+                <button id="cancel-save">Cancel</button>
               </div>
-            `;
-            document.body.appendChild(confirmDialog);
+            </div>
+          `;
+          document.body.appendChild(confirmDialog);
+          
+          // Add event handlers for the dialog buttons
+          return new Promise<void>((resolve) => {
+            const confirmButton = document.getElementById('confirm-save');
+            const cancelButton = document.getElementById('cancel-save');
             
-            // Add event handlers for the dialog buttons
-            return new Promise<void>((resolve) => {
-              const confirmButton = document.getElementById('confirm-save');
-              const cancelButton = document.getElementById('cancel-save');
-              
-              if (confirmButton) {
-                confirmButton.addEventListener('click', async () => {
-                  // Remove the dialog
-                  document.body.removeChild(confirmDialog);
-                  
-                  // Proceed with the save operation
-                  const projectBlob = await audioEngine.saveProject(currentProjectName!);
-                  const fileName = originalFileName;
-                  console.log(`Saving project to file: ${fileName}`);
-                  
-                  // Download the project
-                  await downloadProject(projectBlob, fileName);
-                  
-                  // Show success notification with special message for updates
-                  showNotification(`Project saved. Replace the original file with this updated version.`);
-                  
-                  resolve();
-                });
-              }
-              
-              if (cancelButton) {
-                cancelButton.addEventListener('click', () => {
-                  // Remove the dialog and cancel the operation
-                  document.body.removeChild(confirmDialog);
-                  resolve();
-                });
-              }
-            }).finally(() => {
-              // Reset button regardless of selection
-              saveButton.textContent = 'Save';
-              (saveButton as HTMLButtonElement).disabled = false;
-            });
-          } else {
-            // For new projects, just save with the current name
+            if (confirmButton) {
+              confirmButton.addEventListener('click', async () => {
+                // Remove the dialog
+                document.body.removeChild(confirmDialog);
+                
+                // Proceed with the save operation
+                const projectBlob = await audioEngine.saveProject(currentProjectName!);
+                const fileName = originalFileName;
+                console.log(`Saving project to file: ${fileName}`);
+                
+                // Download the project
+                await downloadProject(projectBlob, fileName);
+                
+                // Show success notification with special message for updates
+                showNotification(`Project saved. Replace the original file with this updated version.`);
+                
+                resolve();
+              });
+            }
+            
+            if (cancelButton) {
+              cancelButton.addEventListener('click', () => {
+                // Remove the dialog and cancel the operation
+                document.body.removeChild(confirmDialog);
+                resolve();
+              });
+            }
+          }).finally(() => {
+            // Reset button regardless of selection
+            saveButton.textContent = 'Save';
+            (saveButton as HTMLButtonElement).disabled = false;
+          });
+        } else {
+          // For new projects, save locally
+          try {
             const projectBlob = await audioEngine.saveProject(currentProjectName!);
             const fileName = `${currentProjectName}.dawn.zip`;
             console.log(`Saving project to file: ${fileName}`);
@@ -403,15 +402,21 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
             
             // Show success notification
             showNotification('Project saved successfully');
+          } finally {
+            // Reset button regardless of success/failure
+            saveButton.textContent = 'Save';
+            (saveButton as HTMLButtonElement).disabled = false;
           }
-        } finally {
-          // Reset button regardless of success/failure
+        }
+      } catch (error: unknown) {
+        console.error('Error saving project:', error);
+        showNotification('Failed to save project', true);
+        
+        // Make sure the button is reset if there's an error
+        if (saveButton) {
           saveButton.textContent = 'Save';
           (saveButton as HTMLButtonElement).disabled = false;
         }
-      } catch (error) {
-        console.error('Error saving project:', error);
-        showNotification('Failed to save project', true);
       }
     });
   }
@@ -444,12 +449,11 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
           const fileName = `${projectName}.dawn.zip`;
           console.log(`Saving project as: ${fileName}`);
           
-          // Download the project
+          // Download the project locally
           await downloadProject(projectBlob, fileName);
-          
+            
           // Show success notification
           showNotification('Project saved as "' + projectName + '"');
-          
         } finally {
           // Reset button regardless of success/failure
           saveAsButton.textContent = 'Save As';
@@ -464,9 +468,17 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   
   // Load project button
   if (loadButton && audioEngine) {
-    loadButton.addEventListener('click', async () => {
+    // Store references to elements and services we'll need
+    const localAudioEngine = audioEngine;
+    const localLoadButton = loadButton;
+    
+    localLoadButton.addEventListener('click', () => {
       console.log('Load button clicked');
-      
+      handleLocalFileLoad();
+    });
+    
+    // Helper function to handle local file loading
+    async function handleLocalFileLoad() {
       try {
         // Create a file input element
         const fileInput = document.createElement('input');
@@ -482,14 +494,16 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
             console.log(`Selected file: ${file.name}`);
             
             // Show loading message
-            loadButton.textContent = 'Loading...';
-            (loadButton as HTMLButtonElement).disabled = true;
+            localLoadButton.textContent = 'Loading...';
+            (localLoadButton as HTMLButtonElement).disabled = true;
             
             try {
               // Load the project
               console.log('Starting project load...');
-              const success = await audioEngine.loadProject(file);
+              const success = await localAudioEngine.loadProject(file);
               console.log(`Project load result: ${success ? 'success' : 'failure'}`);
+              
+              // Local file loaded
               
               // Force update track width and UI after loading
               setTimeout(() => {
@@ -498,69 +512,17 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
               }, 500);
               
               if (success) {
-                console.log('Project loaded successfully');
-                
-                // Show success notification
-                const notification = document.createElement('div');
-                notification.className = 'toast-notification';
-                notification.textContent = 'Project loaded successfully';
-                document.body.appendChild(notification);
-                
-                // Show and then hide the notification
-                setTimeout(() => {
-                  notification.classList.add('visible');
-                  setTimeout(() => {
-                    notification.classList.remove('visible');
-                    setTimeout(() => {
-                      document.body.removeChild(notification);
-                    }, 300); // Wait for fade-out animation
-                  }, 1500); // Show for 1.5 seconds
-                }, 10);
+                showNotification('Project loaded successfully');
               } else {
-                console.error('Failed to load project');
-                
-                // Show error notification
-                const notification = document.createElement('div');
-                notification.className = 'toast-notification';
-                notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
-                notification.textContent = 'Failed to load project';
-                document.body.appendChild(notification);
-                
-                // Show and then hide the notification
-                setTimeout(() => {
-                  notification.classList.add('visible');
-                  setTimeout(() => {
-                    notification.classList.remove('visible');
-                    setTimeout(() => {
-                      document.body.removeChild(notification);
-                    }, 300); // Wait for fade-out animation
-                  }, 1500); // Show for 1.5 seconds
-                }, 10);
+                showNotification('Failed to load project', true);
               }
-            } catch (error) {
+            } catch (error: unknown) {
               console.error('Error loading project:', error);
-              
-              // Show error notification
-              const notification = document.createElement('div');
-              notification.className = 'toast-notification';
-              notification.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
-              notification.textContent = 'Error loading project';
-              document.body.appendChild(notification);
-              
-              // Show and then hide the notification
-              setTimeout(() => {
-                notification.classList.add('visible');
-                setTimeout(() => {
-                  notification.classList.remove('visible');
-                  setTimeout(() => {
-                    document.body.removeChild(notification);
-                  }, 300); // Wait for fade-out animation
-                }, 1500); // Show for 1.5 seconds
-              }, 10);
+              showNotification('Error loading project', true);
             } finally {
               // Reset button
-              loadButton.textContent = 'Load';
-              (loadButton as HTMLButtonElement).disabled = false;
+              localLoadButton.textContent = 'Load';
+              (localLoadButton as HTMLButtonElement).disabled = false;
             }
           }
           
@@ -570,14 +532,14 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         
         // Trigger the file dialog
         fileInput.click();
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error setting up file input:', error);
         
         // Reset button
-        loadButton.textContent = 'Load';
-        (loadButton as HTMLButtonElement).disabled = false;
+        localLoadButton.textContent = 'Load';
+        (localLoadButton as HTMLButtonElement).disabled = false;
       }
-    });
+    }
   }
   
   if (exportButton && audioEngine) {
@@ -609,15 +571,20 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
           exportButton.textContent = 'Export';
           (exportButton as HTMLButtonElement).disabled = false;
         }, 100);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error exporting mix:', error);
-        exportButton.textContent = 'Export Failed';
         
-        // Reset button after delay
-        setTimeout(() => {
-          exportButton.textContent = 'Export';
-          (exportButton as HTMLButtonElement).disabled = false;
-        }, 2000);
+        if (exportButton) {
+          exportButton.textContent = 'Export Failed';
+          
+          // Reset button after delay
+          setTimeout(() => {
+            if (exportButton) {
+              exportButton.textContent = 'Export';
+              (exportButton as HTMLButtonElement).disabled = false;
+            }
+          }, 2000);
+        }
       }
     });
   }
