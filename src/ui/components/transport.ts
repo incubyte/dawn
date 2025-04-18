@@ -126,6 +126,13 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         if (timelineCursor) {
           (timelineCursor as HTMLElement).style.left = '0px';
         }
+        
+        // Reset the playback cursor position to the beginning as well
+        const playbackCursor = document.querySelector('.playback-cursor');
+        if (playbackCursor) {
+          // Account for the track header width (200px)
+          (playbackCursor as HTMLElement).style.left = '200px';
+        }
       } catch (error) {
         console.error('Error stopping playback:', error);
       }

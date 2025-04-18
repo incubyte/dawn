@@ -55,11 +55,52 @@ export function createTimeline(options: TimelineOptions = {
 }
 
 export function updateTimelineCursor(time: number, pixelsPerSecond: number): void {
+  // Update the timeline cursor
   const cursor = document.querySelector('.timeline-content .timeline-cursor');
   if (!cursor) return;
 
   const position = time * pixelsPerSecond;
   cursor.setAttribute('style', `left: ${position}px`);
+
+  // Get the tracks container element to add/position the playback cursor
+  const tracksContainer = document.querySelector('.tracks-container');
+  if (!tracksContainer) return;
+
+  // Update or create the playback cursor
+  let playbackCursor = document.querySelector('.playback-cursor') as HTMLElement;
+  
+  if (!playbackCursor) {
+    // Create the playback cursor if it doesn't exist
+    playbackCursor = document.createElement('div');
+    playbackCursor.className = 'playback-cursor';
+    tracksContainer.appendChild(playbackCursor); // Add to tracks container
+  }
+  
+  // Calculate the cursor height based on the number of tracks
+  const tracks = tracksContainer.querySelectorAll('.track');
+  let cursorHeight = 0;
+  
+  if (tracks.length > 0) {
+    // Get the position of the last track's bottom edge
+    const lastTrack = tracks[tracks.length - 1] as HTMLElement;
+    const lastTrackRect = lastTrack.getBoundingClientRect();
+    const tracksContainerRect = tracksContainer.getBoundingClientRect();
+    
+    // Calculate the height from the top of the tracks container to the bottom of the last track
+    cursorHeight = (lastTrackRect.top + lastTrackRect.height) - tracksContainerRect.top;
+  } else {
+    // If no tracks, just set a default small height
+    cursorHeight = 80; // Default track height
+  }
+  
+  // Account for the track header width to ensure alignment with timeline cursor
+  // The track header is 200px wide (same as timeline header)
+  const headerWidth = 200;
+  
+  // Position the cursor at the same horizontal position as the timeline cursor
+  // But accounting for the header offset in the tracks container
+  playbackCursor.style.left = `${position + headerWidth}px`;
+  playbackCursor.style.height = `${cursorHeight}px`;
 
   // Auto-scroll the timeline to keep the cursor visible
   const timeline = document.getElementById('timeline');

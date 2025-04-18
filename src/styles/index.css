@@ -252,6 +252,22 @@ body {
   z-index: 10;
 }
 
+/* Extended playback cursor that spans across tracks */
+.playback-cursor {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  background-color: var(--primary-color);
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.8;
+  box-shadow: 0 0 5px rgba(0, 120, 215, 0.5);
+  /* Fix for precise vertical alignment issues */
+  margin-left: 0;
+  padding: 0;
+  border: none;
+}
+
 .zoom-controls {
   position: absolute;
   top: 5px;
