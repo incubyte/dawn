@@ -571,7 +571,7 @@ body {
   top: 10px;
   border-radius: 4px;
   background: var(--primary-color);
-  cursor: move;
+  cursor: grab; /* Indicate draggable */
   overflow: hidden;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   transition: transform 0.1s, box-shadow 0.1s, border 0.2s;
@@ -595,6 +595,35 @@ body {
   opacity: 0.7;
   transform: scale(1.02);
   z-index: 10;
+  cursor: grabbing;
+}
+
+/* Animation for clips moved between tracks */
+.audio-clip.moved {
+  animation: moved-clip-animation 0.5s ease;
+}
+
+@keyframes moved-clip-animation {
+  0% { transform: scale(0.95); background-color: var(--primary-color); }
+  50% { transform: scale(1.05); background-color: #4caf50; }
+  100% { transform: scale(1); background-color: var(--primary-color); }
+}
+
+/* Add visual cue to indicate draggable functionality */
+.audio-clip:before {
+  content: '⠿'; /* Unicode grip pattern */
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.audio-clip:hover:before {
+  opacity: 1;
 }
 
 .clip-label {
@@ -709,6 +738,12 @@ body {
   background-color: var(--drag-highlight) !important;
   border: 2px dashed var(--drag-highlight-border) !important;
   box-shadow: inset 0 0 30px rgba(0, 120, 215, 0.1);
+}
+
+.drag-highlight-clip {
+  background-color: rgba(76, 175, 80, 0.3) !important;
+  border: 2px dashed rgba(76, 175, 80, 0.8) !important;
+  box-shadow: inset 0 0 30px rgba(76, 175, 80, 0.1);
 }
 
 .drag-error {

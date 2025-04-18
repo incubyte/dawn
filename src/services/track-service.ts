@@ -8,6 +8,7 @@ export interface TrackService {
   addClipToTrack(trackId: string, clip: AudioClip): void;
   removeClipFromTrack(trackId: string, clipId: string): void;
   updateClipPosition(trackId: string, clipId: string, startTime: number): void;
+  moveClipToTrack(sourceTrackId: string, targetTrackId: string, clipId: string, newStartTime?: number): AudioClip | null;
   addEffectToTrack(trackId: string, effect: Effect): void;
   removeEffectFromTrack(trackId: string, effectId: string): void;
   getTrackClips(trackId: string): AudioClip[];
@@ -82,6 +83,39 @@ export function createTrackService(
           clip.startTime = startTime;
         }
       }
+    },
+    
+    moveClipToTrack(sourceTrackId: string, targetTrackId: string, clipId: string, newStartTime?: number): AudioClip | null {
+      // Get the source and target tracks
+      const sourceTrack = tracks.get(sourceTrackId);
+      const targetTrack = tracks.get(targetTrackId);
+      
+      if (!sourceTrack || !targetTrack) {
+        console.warn(`Cannot move clip: Source or target track not found`);
+        return null;
+      }
+      
+      // Find the clip in the source track
+      const clipIndex = sourceTrack.clips.findIndex(c => c.id === clipId);
+      if (clipIndex === -1) {
+        console.warn(`Cannot move clip: Clip ${clipId} not found in source track ${sourceTrackId}`);
+        return null;
+      }
+      
+      // Remove the clip from the source track
+      const [clip] = sourceTrack.clips.splice(clipIndex, 1);
+      
+      // If a new start time is provided, update it
+      if (newStartTime !== undefined) {
+        clip.startTime = newStartTime;
+      }
+      
+      // Add the clip to the target track
+      targetTrack.clips.push(clip);
+      
+      console.log(`Moved clip ${clipId} from track ${sourceTrackId} to track ${targetTrackId}`);
+      
+      return clip;
     },
     
     addEffectToTrack(trackId: string, effect: Effect): void {

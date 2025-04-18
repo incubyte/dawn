@@ -11,6 +11,10 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   clipElement.dataset.offset = clip.offset.toString();
   clipElement.style.width = `${width}px`;
   clipElement.style.left = `${clip.startTime * pixelsPerSecond}px`;
+  clipElement.title = "Drag to move between tracks, Alt+drag to reposition within track";
+  
+  // Make sure draggable is explicitly set
+  clipElement.draggable = true;
   
   // Create the clip content
   const labelElement = document.createElement('div');

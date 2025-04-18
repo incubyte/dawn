@@ -487,6 +487,114 @@ export function setupEventHandlers(
     name: string;
   } | null = null;
   
+  // Handle clip drop for moving between tracks
+  function handleClipDrop(dragEvent: DragEvent, dropZone: Element, transferData: { clipId: string, trackId: string }) {
+    const { clipId, trackId: sourceTrackId } = transferData;
+    
+    // Get the target track ID
+    const targetTrackElement = dropZone.closest('.track');
+    if (!targetTrackElement) {
+      console.warn('No target track element found for clip drop');
+      return;
+    }
+    
+    const targetTrackId = targetTrackElement.getAttribute('data-track-id');
+    if (!targetTrackId) {
+      console.warn('No target track ID found for clip drop');
+      return;
+    }
+    
+    // If source and target tracks are the same, this is just a repositioning, not a track change
+    if (sourceTrackId === targetTrackId) {
+      console.log('Clip dropped on the same track - not moving between tracks');
+      return;
+    }
+    
+    console.log(`Moving clip ${clipId} from track ${sourceTrackId} to track ${targetTrackId}`);
+    
+    // Calculate the new position based on drop coordinates
+    const rect = dropZone.getBoundingClientRect();
+    const dropX = dragEvent.clientX - rect.left;
+    const newStartTime = Math.max(0, dropX / pixelsPerSecond);
+    
+    // 1. Find the original clip element
+    const sourceClipElement = document.querySelector(`[data-clip-id="${clipId}"]`);
+    if (!sourceClipElement) {
+      console.warn('Source clip element not found');
+      return;
+    }
+    
+    // Get the clip data from the source track
+    const sourceTrack = trackService.getAllTracks().find(t => t.id === sourceTrackId);
+    if (!sourceTrack) {
+      console.warn('Source track not found');
+      return;
+    }
+    
+    const sourceClip = sourceTrack.clips.find(c => c.id === clipId);
+    if (!sourceClip) {
+      console.warn('Source clip not found in track data');
+      return;
+    }
+    
+    // 2. Move the clip in the data model
+    const movedClip = trackService.moveClipToTrack(sourceTrackId, targetTrackId, clipId, newStartTime);
+    
+    if (!movedClip) {
+      console.error('Failed to move clip between tracks');
+      return;
+    }
+    
+    // 3. Remove the clip from the source track's UI
+    sourceClipElement.remove();
+    
+    // 4. Add the clip to the target track's UI
+    const targetClipContainer = targetTrackElement.querySelector('.track-clips');
+    if (!targetClipContainer) {
+      console.warn('Target clip container not found');
+      return;
+    }
+    
+    // Create a new clip element for the target track
+    const newClipElement = createClipElement(movedClip, pixelsPerSecond);
+    targetClipContainer.appendChild(newClipElement);
+    
+    // Setup all event handlers for the new clip element
+    setupClipEventListeners(newClipElement, movedClip, targetTrackId);
+    
+    // Set an attribute to remember this clip was moved (for debugging)
+    newClipElement.setAttribute('data-was-moved', 'true');
+    
+    // Make sure draggable is set to true
+    newClipElement.draggable = true;
+    
+    // Extra debug check
+    console.log("New clip element draggable status:", newClipElement.draggable);
+    
+    // Visual feedback
+    newClipElement.classList.add('moved');
+    setTimeout(() => {
+      newClipElement.classList.remove('moved');
+    }, 500);
+    
+    // Show toast notification
+    const notification = document.createElement('div');
+    notification.className = 'toast-notification';
+    notification.textContent = 'Clip moved to another track';
+    document.body.appendChild(notification);
+    
+    // Show and then hide the notification
+    setTimeout(() => {
+      notification.classList.add('visible');
+      setTimeout(() => {
+        notification.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300); // Wait for fade-out animation
+      }, 1500); // Show for 1.5 seconds
+    }, 10);
+  }
+  
   // Function to remove a track
   function removeTrack(trackId: string) {
     console.log(`Removing track ${trackId}`);
@@ -752,6 +860,12 @@ export function setupEventHandlers(
     const clipElement = createClipElement(clip, pixelsPerSecond);
     clipContainer.appendChild(clipElement);
     
+    // Set up all event handlers for the clip
+    setupClipEventListeners(clipElement, clip, trackId);
+  }
+  
+  // Function to set up all event listeners for a clip element
+  function setupClipEventListeners(clipElement: HTMLElement, clip: AudioClip, trackId: string) {
     // Add event listeners for clip interaction
     clipElement.addEventListener('dragstart', (e) => {
       const target = e.target as HTMLElement;
@@ -771,7 +885,42 @@ export function setupEventHandlers(
       target.classList.remove('dragging');
     });
     
-    // Handle clip selection
+    // Handle clip selection - need to add the click handler as well
+    clipElement.addEventListener('click', (e) => {
+      // Don't handle clicks on action buttons
+      if ((e.target as HTMLElement).closest('.clip-actions')) {
+        return;
+      }
+      
+      // Don't handle clicks on trim handles
+      if ((e.target as HTMLElement).classList.contains('trim-handle')) {
+        return;
+      }
+      
+      // Toggle selection state
+      const isAlreadySelected = clipElement.classList.contains('selected');
+      
+      // Clear any other selected clips first
+      document.querySelectorAll('.audio-clip.selected').forEach(selectedClip => {
+        if (selectedClip !== clipElement) {
+          selectedClip.classList.remove('selected');
+        }
+      });
+      
+      // If it wasn't already selected, select it now
+      if (!isAlreadySelected) {
+        clipElement.classList.add('selected');
+        selectedClipId = clip.id;
+      } else {
+        // If it was already selected, deselect it
+        clipElement.classList.remove('selected');
+        selectedClipId = null;
+      }
+      
+      console.log(`Clip ${clip.id} ${!isAlreadySelected ? 'selected' : 'deselected'}`);
+    });
+    
+    // Also keep the custom event handler
     clipElement.addEventListener('clip:select', (e: Event) => {
       const customEvent = e as CustomEvent;
       const { clipId, selected } = customEvent.detail;
@@ -789,25 +938,37 @@ export function setupEventHandlers(
       removeClip(trackId, clipId);
     });
     
-    // Add click-and-drag for repositioning clips
+    // We'll use two different dragging modes:
+    // 1. Native drag-and-drop (for moving between tracks)
+    // 2. Custom drag behavior (for repositioning within a track)
+    
+    // Variables for custom drag behavior within track
     let isDragging = false;
     let startX = 0;
     let originalLeft = 0;
     
+    // Use ALT+drag to reposition within the same track
     clipElement.addEventListener('mousedown', (e) => {
       // Don't start dragging if we clicked on a button or action element
       if ((e.target as HTMLElement).closest('.clip-actions')) {
         return;
       }
       
-      isDragging = true;
-      startX = e.clientX;
-      originalLeft = parseInt(clipElement.style.left || '0', 10);
-      
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-      
-      e.preventDefault(); // Prevent text selection
+      // If Alt key is pressed, use custom dragging for precise positioning
+      if (e.altKey) {
+        isDragging = true;
+        startX = e.clientX;
+        originalLeft = parseInt(clipElement.style.left || '0', 10);
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        
+        // Disable native drag-and-drop temporarily
+        clipElement.draggable = false;
+        
+        e.preventDefault(); // Prevent text selection
+      }
+      // Otherwise, let the native drag-and-drop handle it
     });
     
     function onMouseMove(e: MouseEvent) {
@@ -826,9 +987,14 @@ export function setupEventHandlers(
     }
     
     function onMouseUp() {
+      if (!isDragging) return;
+      
       isDragging = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      
+      // Re-enable native drag-and-drop
+      clipElement.draggable = true;
       
       // Update the clip position in the track service
       trackService.updateClipPosition(trackId, clip.id, clip.startTime);
@@ -859,9 +1025,17 @@ export function setupEventHandlers(
             selectedTrackId = trackElement.getAttribute('data-track-id');
             console.log(`Selected track for drop: ${selectedTrackId}`);
           }
+          
+          // Determine if we're dragging a clip or a file
+          const dragEvent = e as DragEvent;
+          if (dragEvent.dataTransfer?.types.includes('text/plain')) {
+            // Likely dragging a clip - use special highlight
+            dropZone.classList.add('drag-highlight-clip');
+          } else if (dragEvent.dataTransfer?.types.includes('Files')) {
+            // Dragging files
+            dropZone.classList.add('drag-highlight');
+          }
         }
-        
-        dropZone.classList.add('drag-highlight');
       });
     });
     
@@ -870,12 +1044,38 @@ export function setupEventHandlers(
         e.preventDefault();
         e.stopPropagation();
         dropZone.classList.remove('drag-highlight');
+        dropZone.classList.remove('drag-highlight-clip');
       });
     });
     
     // Handle drop on this specific track
     dropZone.addEventListener('drop', async (e) => {
-      await handleFileDrop(e, dropZone);
+      const dragEvent = e as DragEvent;
+      
+      // First check if this is a clip being dragged (not a file)
+      if (dragEvent.dataTransfer) {
+        try {
+          const dataText = dragEvent.dataTransfer.getData('text/plain');
+          if (dataText) {
+            const transferData = JSON.parse(dataText);
+            
+            if (transferData.clipId && transferData.trackId) {
+              console.log("Detected clip drop with data:", transferData);
+              // This is a clip being dragged
+              handleClipDrop(dragEvent, dropZone, transferData);
+              return; // Exit early since this is a clip drop, not a file drop
+            }
+          }
+        } catch (error) {
+          // If parsing fails, it's not our formatted data, continue with file drop
+          console.log('Not a clip drag operation or error parsing:', error);
+        }
+      }
+      
+      // If we reach here, handle as a normal file drop
+      if (dragEvent.dataTransfer?.files.length) {
+        await handleFileDrop(dragEvent, dropZone);
+      }
     });
   }
   
