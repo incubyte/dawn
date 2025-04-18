@@ -85,6 +85,46 @@ export function setupEventHandlers(
     pasteClipToSelectedTrack();
   });
   
+  // Listen for clip trim events
+  document.addEventListener('clip:trim', (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const { trackId, clipId, startTime, duration, offset } = customEvent.detail;
+    
+    console.log(`Trim event: Track ${trackId}, Clip ${clipId}`);
+    console.log(`New values: startTime=${startTime}, duration=${duration}, offset=${offset}`);
+    
+    // Update the clip in the track service
+    const track = trackService.getAllTracks().find(t => t.id === trackId);
+    if (track) {
+      const clip = track.clips.find(c => c.id === clipId);
+      if (clip) {
+        // Update the clip properties
+        clip.startTime = startTime;
+        clip.duration = duration;
+        clip.offset = offset;
+        
+        console.log(`Updated clip ${clipId} in track ${trackId}: startTime=${startTime}, duration=${duration}, offset=${offset}`);
+        
+        // Create toast notification
+        const notification = document.createElement('div');
+        notification.className = 'toast-notification';
+        notification.textContent = 'Clip trimmed';
+        document.body.appendChild(notification);
+        
+        // Show and then hide the notification
+        setTimeout(() => {
+          notification.classList.add('visible');
+          setTimeout(() => {
+            notification.classList.remove('visible');
+            setTimeout(() => {
+              document.body.removeChild(notification);
+            }, 300); // Wait for fade-out animation
+          }, 1500); // Show for 1.5 seconds
+        }, 10);
+      }
+    }
+  });
+  
   // Transport controls - only apply these if we don't have a reference to the AudioEngine
   // (otherwise, they're handled by transport.ts)
   if (!audioEngine) {

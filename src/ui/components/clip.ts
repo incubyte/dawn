@@ -8,6 +8,7 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   clipElement.dataset.clipId = clip.id;
   clipElement.dataset.startTime = clip.startTime.toString();
   clipElement.dataset.duration = clip.duration.toString();
+  clipElement.dataset.offset = clip.offset.toString();
   clipElement.style.width = `${width}px`;
   clipElement.style.left = `${clip.startTime * pixelsPerSecond}px`;
   
@@ -56,8 +57,22 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   const waveformElement = document.createElement('div');
   waveformElement.classList.add('clip-waveform');
   
+  // Add trim handles
+  const leftTrimHandle = document.createElement('div');
+  leftTrimHandle.classList.add('trim-handle', 'trim-handle-left');
+  
+  const rightTrimHandle = document.createElement('div');
+  rightTrimHandle.classList.add('trim-handle', 'trim-handle-right');
+  
+  // Add trim guide line
+  const trimGuide = document.createElement('div');
+  trimGuide.classList.add('trim-guide');
+  
   clipElement.appendChild(labelElement);
   clipElement.appendChild(waveformElement);
+  clipElement.appendChild(leftTrimHandle);
+  clipElement.appendChild(rightTrimHandle);
+  clipElement.appendChild(trimGuide);
   
   // If we have an audio buffer, render the waveform
   if (clip.buffer) {
@@ -72,6 +87,11 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   clipElement.addEventListener('click', (e) => {
     // Don't handle clicks on action buttons
     if ((e.target as HTMLElement).closest('.clip-actions')) {
+      return;
+    }
+    
+    // Don't handle clicks on trim handles
+    if ((e.target as HTMLElement).classList.contains('trim-handle')) {
       return;
     }
     
@@ -107,7 +127,184 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
     clipElement.dispatchEvent(selectEvent);
   });
   
+  // Setup trim handlers
+  setupTrimHandlers(clipElement, leftTrimHandle, rightTrimHandle, trimGuide, clip, pixelsPerSecond);
+  
   return clipElement;
+}
+
+// Function to set up trim handlers
+function setupTrimHandlers(
+  clipElement: HTMLElement, 
+  leftHandle: HTMLElement, 
+  rightHandle: HTMLElement, 
+  trimGuide: HTMLElement,
+  _clip: AudioClip, // Prefixed with underscore to indicate it's intentionally unused
+  pixelsPerSecond: number
+): void {
+  let isDraggingLeft = false;
+  let isDraggingRight = false;
+  let startX = 0;
+  let originalClipLeft = 0;
+  let originalClipWidth = 0;
+  let originalClipOffset = 0;
+  let originalClipDuration = 0;
+  let maxLeftTrim = 0;
+  let maxRightTrim = 0;
+  
+  // Left handle (trim start)
+  leftHandle.addEventListener('mousedown', (e) => {
+    e.stopPropagation(); // Prevent clip dragging
+    clipElement.draggable = false; // Disable dragging during trim
+    
+    isDraggingLeft = true;
+    startX = e.clientX;
+    originalClipLeft = parseInt(clipElement.style.left || '0', 10);
+    originalClipWidth = parseInt(clipElement.style.width || '0', 10);
+    originalClipOffset = parseFloat(clipElement.dataset.offset || '0');
+    originalClipDuration = parseFloat(clipElement.dataset.duration || '0');
+    
+    // Maximum allowed trim is 90% of the clip width (leave at least 10%)
+    maxLeftTrim = originalClipWidth * 0.9;
+    
+    leftHandle.classList.add('active');
+    clipElement.classList.add('trimming');
+    
+    // Show the trim guide at the initial position
+    trimGuide.style.left = '0px';
+    trimGuide.classList.add('visible');
+    
+    document.addEventListener('mousemove', onLeftTrimMove);
+    document.addEventListener('mouseup', onTrimEnd);
+    
+    e.preventDefault(); // Prevent text selection
+  });
+  
+  // Right handle (trim end)
+  rightHandle.addEventListener('mousedown', (e) => {
+    e.stopPropagation(); // Prevent clip dragging
+    clipElement.draggable = false; // Disable dragging during trim
+    
+    isDraggingRight = true;
+    startX = e.clientX;
+    originalClipWidth = parseInt(clipElement.style.width || '0', 10);
+    originalClipDuration = parseFloat(clipElement.dataset.duration || '0');
+    
+    // Maximum allowed trim is 90% of the clip width (leave at least 10%)
+    maxRightTrim = originalClipWidth * 0.9;
+    
+    rightHandle.classList.add('active');
+    clipElement.classList.add('trimming');
+    
+    // Show the trim guide at the initial position
+    trimGuide.style.left = `${originalClipWidth}px`;
+    trimGuide.classList.add('visible');
+    
+    document.addEventListener('mousemove', onRightTrimMove);
+    document.addEventListener('mouseup', onTrimEnd);
+    
+    e.preventDefault(); // Prevent text selection
+  });
+  
+  function onLeftTrimMove(e: MouseEvent) {
+    if (!isDraggingLeft) return;
+    
+    // Calculate trim amount
+    const deltaX = e.clientX - startX;
+    
+    // Limit the trim to avoid making the clip too small
+    const trimAmount = Math.min(Math.max(deltaX, 0), maxLeftTrim);
+    
+    // Update clip position and width in the UI
+    const newLeft = originalClipLeft + trimAmount;
+    const newWidth = originalClipWidth - trimAmount;
+    
+    clipElement.style.left = `${newLeft}px`;
+    clipElement.style.width = `${newWidth}px`;
+    
+    // Update the trim guide position
+    trimGuide.style.left = `${trimAmount}px`;
+    
+    // Calculate new values for clip data
+    const newOffset = originalClipOffset + (trimAmount / pixelsPerSecond);
+    const newDuration = originalClipDuration - (trimAmount / pixelsPerSecond);
+    const newStartTime = parseFloat(clipElement.dataset.startTime || '0') + (trimAmount / pixelsPerSecond);
+    
+    // Update the clip element data attributes (but don't commit to model yet)
+    clipElement.dataset.offset = newOffset.toString();
+    clipElement.dataset.duration = newDuration.toString();
+    clipElement.dataset.startTime = newStartTime.toString();
+  }
+  
+  function onRightTrimMove(e: MouseEvent) {
+    if (!isDraggingRight) return;
+    
+    // Calculate trim amount
+    const deltaX = e.clientX - startX;
+    
+    // Limit the trim to avoid making the clip too small
+    const trimAmount = Math.min(Math.max(-deltaX, 0), maxRightTrim);
+    
+    // Update clip width in the UI
+    const newWidth = originalClipWidth - trimAmount;
+    
+    clipElement.style.width = `${newWidth}px`;
+    
+    // Update the trim guide position
+    trimGuide.style.left = `${newWidth}px`;
+    
+    // Calculate new value for clip duration
+    const newDuration = originalClipDuration - (trimAmount / pixelsPerSecond);
+    
+    // Update the clip element data attribute (but don't commit to model yet)
+    clipElement.dataset.duration = newDuration.toString();
+  }
+  
+  function onTrimEnd() {
+    // Remove the active classes
+    leftHandle.classList.remove('active');
+    rightHandle.classList.remove('active');
+    clipElement.classList.remove('trimming');
+    
+    // Hide the trim guide
+    trimGuide.classList.remove('visible');
+    
+    // Update the clip in the track service
+    if (isDraggingLeft || isDraggingRight) {
+      // Get the track and clip IDs
+      const trackElement = clipElement.closest('.track');
+      if (trackElement) {
+        const trackId = trackElement.getAttribute('data-track-id');
+        const clipId = clipElement.getAttribute('data-clip-id');
+        
+        if (trackId && clipId) {
+          // Dispatch a trim event to update the model
+          const trimEvent = new CustomEvent('clip:trim', {
+            bubbles: true,
+            detail: {
+              trackId,
+              clipId,
+              startTime: parseFloat(clipElement.dataset.startTime || '0'),
+              duration: parseFloat(clipElement.dataset.duration || '0'),
+              offset: parseFloat(clipElement.dataset.offset || '0')
+            }
+          });
+          
+          clipElement.dispatchEvent(trimEvent);
+        }
+      }
+    }
+    
+    // Clean up
+    isDraggingLeft = false;
+    isDraggingRight = false;
+    document.removeEventListener('mousemove', onLeftTrimMove);
+    document.removeEventListener('mousemove', onRightTrimMove);
+    document.removeEventListener('mouseup', onTrimEnd);
+    
+    // Re-enable dragging
+    clipElement.draggable = true;
+  }
 }
 
 function renderWaveformAsync(buffer: AudioBuffer, waveformElement: HTMLElement, width: number): void {

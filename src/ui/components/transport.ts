@@ -27,6 +27,9 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
       <button id="paste-button" class="transport-button" title="Paste to Selected Track (Ctrl+V)">
         <span class="icon">📄</span>
       </button>
+      <button id="trim-info-button" class="transport-button" title="Tip: Select a clip and drag the side handles to trim">
+        <span class="icon">✂️ Trim</span>
+      </button>
       <button id="delete-clip-button" class="transport-button" title="Delete Selected Clip">
         <span class="icon">🗑️</span>
       </button>
@@ -54,6 +57,7 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   const stopButton = document.getElementById('stop-button');
   const copyButton = document.getElementById('copy-button');
   const pasteButton = document.getElementById('paste-button');
+  const trimInfoButton = document.getElementById('trim-info-button');
   const deleteClipButton = document.getElementById('delete-clip-button');
   const deleteTrackButton = document.getElementById('delete-track-button');
   const exportButton = document.getElementById('export-button');
@@ -186,6 +190,38 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
       });
       
       document.dispatchEvent(pasteEvent);
+    });
+  }
+  
+  // Trim info button - shows a tooltip explaining how to trim
+  if (trimInfoButton) {
+    trimInfoButton.addEventListener('click', () => {
+      console.log('Trim info button clicked');
+      
+      // Create toast notification with trim instructions
+      const notification = document.createElement('div');
+      notification.className = 'toast-notification';
+      notification.style.width = '250px';
+      notification.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 5px;">How to trim audio clips:</div>
+        <ol style="margin: 0; padding-left: 20px; text-align: left;">
+          <li>Select a clip</li>
+          <li>Drag the left handle to trim the start</li>
+          <li>Drag the right handle to trim the end</li>
+        </ol>
+      `;
+      document.body.appendChild(notification);
+      
+      // Show and then hide the notification
+      setTimeout(() => {
+        notification.classList.add('visible');
+        setTimeout(() => {
+          notification.classList.remove('visible');
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 300); // Wait for fade-out animation
+        }, 4000); // Show for 4 seconds (longer for this info toast)
+      }, 10);
     });
   }
   

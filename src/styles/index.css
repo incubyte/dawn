@@ -93,17 +93,17 @@ body {
   transform: scale(0.95);
 }
 
-#copy-button, #paste-button {
+#copy-button, #paste-button, #trim-info-button {
   background-color: var(--secondary-color);
   color: var(--text-color);
 }
 
-#copy-button:hover, #paste-button:hover {
+#copy-button:hover, #paste-button:hover, #trim-info-button:hover {
   background-color: rgba(0, 120, 215, 0.2);
   color: var(--primary-color);
 }
 
-#copy-button:active, #paste-button:active {
+#copy-button:active, #paste-button:active, #trim-info-button:active {
   background-color: rgba(0, 120, 215, 0.3);
   transform: scale(0.95);
 }
@@ -623,6 +623,62 @@ body {
   width: 100%;
   background-size: 100% 100%;
   background-repeat: no-repeat;
+}
+
+/* Trim handles */
+.trim-handle {
+  position: absolute;
+  width: 8px;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  cursor: col-resize;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 7;
+  top: 0;
+}
+
+.audio-clip:hover .trim-handle,
+.audio-clip.selected .trim-handle {
+  opacity: 0.7;
+}
+
+.trim-handle:hover,
+.trim-handle.active {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.trim-handle-left {
+  left: 0;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.trim-handle-right {
+  right: 0;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Trim guide line */
+.trim-guide {
+  position: absolute;
+  width: 1px;
+  height: 100%;
+  background-color: white;
+  top: 0;
+  z-index: 8;
+  pointer-events: none;
+  display: none;
+}
+
+.trim-guide.visible {
+  display: block;
+}
+
+.audio-clip.trimming {
+  cursor: col-resize;
 }
 
 /* Drag and Drop Styles */
