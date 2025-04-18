@@ -258,31 +258,47 @@ export function setupEventHandlers(
     tracksContainer.appendChild(trackElement);
     
     // Add event listeners for track controls
+    // Set up mute button with track service integration
     const muteButton = trackElement.querySelector('.mute-button');
     if (muteButton) {
       muteButton.addEventListener('click', () => {
-        track.muted = !track.muted;
-        muteButton.classList.toggle('active', track.muted);
+        // Use track service to handle muting (which also updates audio graph)
+        const isMuted = trackService.toggleMute(track.id);
+        // Update UI to reflect the mute state
+        muteButton.classList.toggle('active', isMuted);
+        // Add visual feedback
+        muteButton.setAttribute('title', isMuted ? 'Unmute' : 'Mute');
       });
     }
     
+    // Set up solo button with track service integration
     const soloButton = trackElement.querySelector('.solo-button');
     if (soloButton) {
       soloButton.addEventListener('click', () => {
-        track.solo = !track.solo;
-        soloButton.classList.toggle('active', track.solo);
+        // Use track service to handle soloing (which also updates audio graph)
+        const isSolo = trackService.toggleSolo(track.id);
+        // Update UI to reflect the solo state
+        soloButton.classList.toggle('active', isSolo);
+        // Add visual feedback
+        soloButton.setAttribute('title', isSolo ? 'Unsolo' : 'Solo');
       });
     }
     
-    // Set up volume slider with visual feedback
+    // Set up volume slider with visual feedback and dynamic control
     const gainSlider = trackElement.querySelector('.gain-slider') as HTMLInputElement;
     const volumeDisplay = trackElement.querySelector('.volume-display') as HTMLElement;
     
     if (gainSlider && volumeDisplay) {
-      // Update volume display when slider changes
+      // Initial volume display value
+      const initialVolume = Math.round(track.gainValue * 100);
+      volumeDisplay.textContent = `${initialVolume}%`;
+      
+      // Update volume display and set actual audio volume when slider changes
       gainSlider.addEventListener('input', () => {
         const volume = parseFloat(gainSlider.value);
-        track.gainValue = volume;
+        
+        // Update the track's volume in the audio engine
+        trackService.setTrackVolume(track.id, volume);
         
         // Update the volume display with percentage
         const volumePercent = Math.round(volume * 100);
@@ -298,16 +314,31 @@ export function setupEventHandlers(
         }
       });
       
-      // Show volume on hover
+      // Show volume on hover or when interacting
       gainSlider.addEventListener('mouseover', () => {
         volumeDisplay.style.opacity = '1';
       });
       
-      // Hide volume when mouse leaves
+      gainSlider.addEventListener('focus', () => {
+        volumeDisplay.style.opacity = '1';
+      });
+      
+      // Hide volume when mouse leaves or interaction ends
       gainSlider.addEventListener('mouseleave', () => {
+        if (document.activeElement !== gainSlider) {
+          // Small delay before hiding
+          setTimeout(() => {
+            volumeDisplay.style.opacity = '0';
+          }, 500);
+        }
+      });
+      
+      gainSlider.addEventListener('blur', () => {
         // Small delay before hiding
         setTimeout(() => {
-          volumeDisplay.style.opacity = '0';
+          if (!gainSlider.matches(':hover')) {
+            volumeDisplay.style.opacity = '0';
+          }
         }, 500);
       });
     }
