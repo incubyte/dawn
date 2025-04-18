@@ -915,3 +915,8 @@ body {
   color: var(--text-muted);
   font-style: italic;
 }
+
+.dawn-logo {
+    height: 80%;
+    filter: invert(1);
+}

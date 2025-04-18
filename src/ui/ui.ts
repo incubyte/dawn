@@ -10,7 +10,7 @@ export function setupUI(audioEngine?: AudioEngine): void {
   app.innerHTML = `
     <div class="daw-container">
       <header class="daw-header">
-        <h1>Browser DAW</h1>
+        <img class="dawn-logo" src="dawn_logo.png">
         <div id="transport-controls" class="transport-controls"></div>
       </header>
       <main class="daw-main">
