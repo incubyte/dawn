@@ -77,7 +77,8 @@ export function createClipElement(clip: AudioClip, pixelsPerSecond: number): HTM
   // If we have an audio buffer, render the waveform
   if (clip.buffer) {
     // Render waveform asynchronously to avoid blocking the UI
-    renderWaveformAsync(clip.buffer, waveformElement, width);
+    // Pass offset and duration to ensure we're showing the correct portion of audio
+    renderWaveformAsync(clip.buffer, waveformElement, width, clip.offset, clip.duration);
   }
   
   // Make clip draggable
@@ -278,19 +279,41 @@ function setupTrimHandlers(
         const clipId = clipElement.getAttribute('data-clip-id');
         
         if (trackId && clipId) {
+          // Get the updated values
+          const updatedOffset = parseFloat(clipElement.dataset.offset || '0');
+          const updatedDuration = parseFloat(clipElement.dataset.duration || '0');
+          const updatedStartTime = parseFloat(clipElement.dataset.startTime || '0');
+          
           // Dispatch a trim event to update the model
           const trimEvent = new CustomEvent('clip:trim', {
             bubbles: true,
             detail: {
               trackId,
               clipId,
-              startTime: parseFloat(clipElement.dataset.startTime || '0'),
-              duration: parseFloat(clipElement.dataset.duration || '0'),
-              offset: parseFloat(clipElement.dataset.offset || '0')
+              startTime: updatedStartTime,
+              duration: updatedDuration,
+              offset: updatedOffset
             }
           });
           
           clipElement.dispatchEvent(trimEvent);
+          
+          // Re-render the waveform with the correct portion of the audio buffer
+          if (_clip.buffer) {
+            const width = parseInt(clipElement.style.width, 10);
+            const waveformElement = clipElement.querySelector('.clip-waveform');
+            if (waveformElement) {
+              // Re-render the waveform with the trimmed portion of the audio
+              // Pass the updated offset and duration to show only the relevant part of the audio
+              renderWaveformAsync(
+                _clip.buffer, 
+                waveformElement, 
+                width, 
+                updatedOffset, // Start offset in seconds
+                updatedDuration // Duration in seconds
+              );
+            }
+          }
         }
       }
     }
@@ -307,14 +330,32 @@ function setupTrimHandlers(
   }
 }
 
-function renderWaveformAsync(buffer: AudioBuffer, waveformElement: HTMLElement, width: number): void {
+function renderWaveformAsync(
+  buffer: AudioBuffer, 
+  waveformElement: HTMLElement, 
+  width: number, 
+  offset?: number, 
+  duration?: number
+): void {
   // Use a smaller height for the waveform canvas to improve performance
   const height = 40;
   
   // Use setTimeout to avoid blocking the UI thread
   setTimeout(() => {
     try {
-      const waveformUrl = renderWaveform(buffer, width, height);
+      // Convert time offsets to sample offsets if provided
+      let offsetSamples: number | undefined;
+      let durationSamples: number | undefined;
+      
+      if (offset !== undefined) {
+        offsetSamples = Math.floor(offset * buffer.sampleRate);
+      }
+      
+      if (duration !== undefined) {
+        durationSamples = Math.floor(duration * buffer.sampleRate);
+      }
+      
+      const waveformUrl = renderWaveform(buffer, width, height, offsetSamples, durationSamples);
       waveformElement.style.backgroundImage = `url(${waveformUrl})`;
     } catch (error) {
       console.error('Error rendering waveform:', error);
@@ -330,6 +371,10 @@ export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, from
   const clipId = clipElement.dataset.clipId;
   if (!clipId) return;
   
+  let updatedOffset = parseFloat(clipElement.dataset.offset || '0');
+  let updatedDuration = parseFloat(clipElement.dataset.duration || '0');
+  let updatedStartTime = parseFloat(clipElement.dataset.startTime || '0');
+  
   if (fromStart) {
     // Trim from start
     const newLeft = left + offsetPixels;
@@ -341,12 +386,14 @@ export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, from
     clipElement.style.width = `${newWidth}px`;
     
     // Update data attributes
-    const originalStartTime = parseFloat(clipElement.dataset.startTime || '0');
-    const originalDuration = parseFloat(clipElement.dataset.duration || '0');
     const offsetSeconds = offsetPixels / pixelsPerSecond;
+    updatedOffset = updatedOffset + offsetSeconds;
+    updatedDuration = updatedDuration - offsetSeconds;
+    updatedStartTime = updatedStartTime + offsetSeconds;
     
-    clipElement.dataset.startTime = (originalStartTime + offsetSeconds).toString();
-    clipElement.dataset.duration = (originalDuration - offsetSeconds).toString();
+    clipElement.dataset.offset = updatedOffset.toString();
+    clipElement.dataset.duration = updatedDuration.toString();
+    clipElement.dataset.startTime = updatedStartTime.toString();
   } else {
     // Trim from end
     const newWidth = width - offsetPixels;
@@ -356,9 +403,56 @@ export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, from
     clipElement.style.width = `${newWidth}px`;
     
     // Update data attributes
-    const originalDuration = parseFloat(clipElement.dataset.duration || '0');
     const offsetSeconds = offsetPixels / pixelsPerSecond;
+    updatedDuration = updatedDuration - offsetSeconds;
     
-    clipElement.dataset.duration = (originalDuration - offsetSeconds).toString();
+    clipElement.dataset.duration = updatedDuration.toString();
+  }
+  
+  // Dispatch a trim event to update the model
+  const trackElement = clipElement.closest('.track');
+  if (trackElement) {
+    const trackId = trackElement.getAttribute('data-track-id');
+    
+    if (trackId && clipId) {
+      // Dispatch event to update the model
+      const trimEvent = new CustomEvent('clip:trim', {
+        bubbles: true,
+        detail: {
+          trackId,
+          clipId,
+          startTime: updatedStartTime,
+          duration: updatedDuration,
+          offset: updatedOffset
+        }
+      });
+      
+      clipElement.dispatchEvent(trimEvent);
+      
+      // Look for the buffer to re-render the waveform
+      const waveformElement = clipElement.querySelector('.clip-waveform');
+      if (waveformElement) {
+        // Find the clip in the track service through the event
+        document.dispatchEvent(new CustomEvent('request:clip:buffer', {
+          bubbles: true,
+          detail: {
+            trackId,
+            clipId,
+            callback: (buffer: AudioBuffer | null) => {
+              if (buffer) {
+                // Re-render the waveform with the correct portion of the audio buffer
+                renderWaveformAsync(
+                  buffer, 
+                  waveformElement, 
+                  parseInt(clipElement.style.width, 10),
+                  updatedOffset,  // Start offset in seconds
+                  updatedDuration // Duration in seconds
+                );
+              }
+            }
+          }
+        }));
+      }
+    }
   }
 }

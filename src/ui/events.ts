@@ -53,6 +53,27 @@ export function setupEventHandlers(
   let startTime = 0;
   let pixelsPerSecond = 10; // 10px = 1 second
   
+  // Add event listener for requesting clip buffer (needed for waveform re-rendering)
+  document.addEventListener('request:clip:buffer', (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const { trackId, clipId, callback } = customEvent.detail;
+    
+    if (trackId && clipId && typeof callback === 'function') {
+      const track = trackService.getAllTracks().find(t => t.id === trackId);
+      if (track) {
+        const clip = track.clips.find(c => c.id === clipId);
+        if (clip) {
+          // Call the callback with the buffer
+          callback(clip.buffer);
+        } else {
+          callback(null);
+        }
+      } else {
+        callback(null);
+      }
+    }
+  });
+  
   // Elements
   const playButton = document.getElementById('play-button');
   const stopButton = document.getElementById('stop-button');
