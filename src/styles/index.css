@@ -450,6 +450,42 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* Loading message */
+.loading-message {
+  color: white;
+  margin-top: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 14px;
+  max-width: 80%;
+  text-align: center;
+}
+
+/* Error notification */
+.error-notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background-color: #e74c3c;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 4px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  font-size: 14px;
+  max-width: 400px;
+  text-align: center;
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.error-notification.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
 /* Modal Dialog */
 .modal-dialog {
   position: fixed;

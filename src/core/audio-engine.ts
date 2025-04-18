@@ -101,6 +101,18 @@ export function setupAudioEngine(): AudioEngine {
       const tracks = trackService.getAllTracks();
       console.log(`Playing ${tracks.length} tracks`);
 
+      // Debug: Dump tracks and clips info
+      console.log("--- TRACKS DUMP at playback start ---");
+      tracks.forEach(track => {
+        console.log(`Track ${track.id}: ${track.clips.length} clips, muted: ${track.muted}, solo: ${track.solo}`);
+        track.clips.forEach(clip => {
+          console.log(`  Clip ${clip.id}: "${clip.name}", startTime: ${clip.startTime}s, duration: ${clip.duration}s, has buffer: ${clip.buffer !== null}`);
+          if (clip.buffer) {
+            console.log(`    Buffer details: ${clip.buffer.duration}s, ${clip.buffer.numberOfChannels} channels, ${clip.buffer.sampleRate}Hz`);
+          }
+        });
+      });
+      
       // Check if we have any tracks to play
       if (tracks.length === 0) {
         console.log('No tracks to play, creating a test tone to verify audio playback');
@@ -218,23 +230,43 @@ export function setupAudioEngine(): AudioEngine {
       });
       
       if (!hasClips) {
-        console.log('No clips to play, creating a test tone to verify audio playback');
-        // Create a simple oscillator as a test tone
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        console.log('No clips found that can be played at the current playback position');
+        console.log(`Current playback offset: ${playbackOffset}s`);
         
-        oscillator.type = 'sine';
-        oscillator.frequency.value = 440; // A4 note
-        gainNode.gain.value = 0.2; // 20% volume
+        // Look for clips that might be positioned further in the timeline
+        let futureClipsExist = false;
+        tracks.forEach(track => {
+          if (!track.muted) {
+            track.clips.forEach(clip => {
+              if (clip.buffer && clip.startTime > playbackOffset) {
+                console.log(`Found future clip "${clip.name}" at ${clip.startTime}s (current position: ${playbackOffset}s)`);
+                futureClipsExist = true;
+              }
+            });
+          }
+        });
         
-        oscillator.connect(gainNode);
-        gainNode.connect(masterGainNode);
-        
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 1.0); // Play for 1 second
-        
-        activeSources.push(oscillator);
-        console.log('Test tone scheduled');
+        if (futureClipsExist) {
+          console.log('Some clips exist in the future. Try seeking to a position where clips exist.');
+        } else {
+          console.log('No clips to play, creating a test tone to verify audio playback');
+          // Create a simple oscillator as a test tone
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 440; // A4 note
+          gainNode.gain.value = 0.2; // 20% volume
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(masterGainNode);
+          
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 1.0); // Play for 1 second
+          
+          activeSources.push(oscillator);
+          console.log('Test tone scheduled');
+        }
       }
       
       console.log(`Playback started with ${activeSources.length} active sources`);

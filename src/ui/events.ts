@@ -4,7 +4,7 @@ import { AudioTrack } from '../models/audio-track';
 import { formatTime } from '../utils/time-formatter';
 import { createAudioFileService } from '../services/audio-file-service';
 import { createTrackService } from '../services/track-service';
-import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
+import { showLoadingIndicator, hideLoadingIndicator, showErrorNotification } from './components/loading';
 import { AudioEngine } from '../core/audio-engine';
 
 export function setupEventHandlers(
@@ -12,9 +12,9 @@ export function setupEventHandlers(
   masterGainNode: GainNode,
   audioEngine?: AudioEngine
 ): void {
-  // Note: In a full implementation, the AudioEngine should be passed directly
-  // rather than recreating these services
-  const trackService = createTrackService(audioContext, masterGainNode);
+  // Use the trackService from the audio engine if provided, otherwise create a new one
+  // (but this will cause tracks added here to not be played by the audio engine)
+  const trackService = audioEngine ? audioEngine.trackService : createTrackService(audioContext, masterGainNode);
   const audioFileService = createAudioFileService(audioContext);
   
   // State management
@@ -85,7 +85,8 @@ export function setupEventHandlers(
   
   // Function to handle imported files
   async function handleImportedFiles(files: File[], trackId: string) {
-    showLoadingIndicator();
+    // Show loading indicator message
+    showLoadingIndicator("Importing audio files...");
     
     try {
       // Process each file in sequence
@@ -121,6 +122,7 @@ export function setupEventHandlers(
           addClipToTrack(trackId, clip);
         } catch (error) {
           console.error(`Error loading audio file ${file.name}:`, error);
+          showErrorNotification(`Failed to load "${file.name}": ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     } finally {
@@ -205,7 +207,16 @@ export function setupEventHandlers(
   
   // Function to add a clip to a track
   function addClipToTrack(trackId: string, clip: AudioClip) {
+    console.log(`Adding clip "${clip.name}" to track ${trackId} (using trackService instance: ${audioEngine?.trackService === trackService ? 'FROM_AUDIO_ENGINE' : 'LOCAL'})`);
     trackService.addClipToTrack(trackId, clip);
+    
+    // Verify clip was added properly
+    const track = trackService.getAllTracks().find(t => t.id === trackId);
+    if (track) {
+      console.log(`Track now has ${track.clips.length} clips`);
+    } else {
+      console.warn(`Track ${trackId} not found after adding clip`);
+    }
     
     const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
     if (!trackElement) return;
@@ -352,8 +363,17 @@ export function setupEventHandlers(
     const startTime = Math.max(0, dropX / pixelsPerSecond);
     console.log(`Calculated drop position: ${startTime}s (x: ${dropX}px, pixelsPerSecond: ${pixelsPerSecond})`);
     
-    // Show loading indicator
-    showLoadingIndicator();
+    // Show loading indicator with message for the file(s) being loaded
+    const loader = showLoadingIndicator("Loading audio files...");
+    
+    // Since mp3 files might take longer to decode, give user feedback
+    for (const file of files) {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      const isMP3 = file.type === 'audio/mp3' || file.type === 'audio/mpeg' || (fileExtension === 'mp3');
+      if (isMP3) {
+        loader.updateMessage(`Processing MP3 file: ${file.name}`);
+      }
+    }
     
     try {
       // Process each file sequentially
@@ -383,6 +403,7 @@ export function setupEventHandlers(
           addClipToTrack(trackId, clip);
         } catch (error) {
           console.error(`Error loading audio file ${file.name}:`, error);
+          showErrorNotification(`Failed to load "${file.name}": ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     } finally {

@@ -10,8 +10,8 @@ export function initializeApp(): void {
   // Initialize audio engine first
   const audioEngine = setupAudioEngine();
   
-  // Set up UI
-  setupUI();
+  // Set up UI with audio engine reference
+  setupUI(audioEngine);
   
   // Create transport controls with the audio engine
   createTransportControls(audioEngine);

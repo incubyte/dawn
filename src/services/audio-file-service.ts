@@ -1,3 +1,5 @@
+import { decodeAudioData } from '../utils/audio-decoder';
+
 export interface AudioFileService {
   loadAudioFile(file: File): Promise<AudioBuffer>;
   exportAudioBuffer(buffer: AudioBuffer, filename: string): Blob;
@@ -6,7 +8,32 @@ export interface AudioFileService {
 export function createAudioFileService(audioContext: AudioContext): AudioFileService {
   return {
     async loadAudioFile(file: File): Promise<AudioBuffer> {
-      console.log(`Loading file: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
+      console.log(`Loading file: ${file.name}, type: ${file.type || 'unknown'}, size: ${file.size} bytes`);
+      
+      // Validate file type
+      let isSupported = false;
+      
+      // Check by MIME type
+      if (file.type.startsWith('audio/')) {
+        isSupported = true;
+      }
+      
+      // Also check by extension (browsers sometimes don't set MIME type correctly)
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      const supportedExtensions = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac'];
+      if (fileExtension && supportedExtensions.includes(fileExtension)) {
+        isSupported = true;
+      }
+      
+      if (!isSupported) {
+        console.warn(`File type may not be supported: ${file.type || 'unknown type'}, extension: ${fileExtension || 'none'}`);
+      }
+      
+      // Special handling for MP3 files to provide better error messages
+      const isMP3 = file.type === 'audio/mp3' || file.type === 'audio/mpeg' || (fileExtension === 'mp3');
+      if (isMP3) {
+        console.log('MP3 file detected, will attempt to decode');
+      }
       
       try {
         // Ensure the audio context is running
@@ -19,14 +46,21 @@ export function createAudioFileService(audioContext: AudioContext): AudioFileSer
         const arrayBuffer = await file.arrayBuffer();
         console.log(`File loaded as ArrayBuffer, size: ${arrayBuffer.byteLength} bytes`);
         
-        // Try to decode the audio
+        // Try to decode the audio using enhanced decoder with fallbacks
         try {
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          // Use our custom decoder with fallbacks for different formats
+          const audioBuffer = await decodeAudioData(arrayBuffer, file, audioContext);
           console.log(`Audio decoded successfully: ${audioBuffer.duration}s, ${audioBuffer.numberOfChannels} channels, ${audioBuffer.sampleRate}Hz`);
           return audioBuffer;
         } catch (decodeError: any) {
           console.error('Error decoding audio data:', decodeError);
-          throw new Error(`Failed to decode audio file: ${decodeError?.message || 'Unknown error'}`);
+          
+          if (isMP3) {
+            // Provide more specific error for MP3
+            throw new Error(`Failed to decode MP3 file: ${decodeError?.message || 'Unknown error'}`);
+          } else {
+            throw new Error(`Failed to decode audio file: ${decodeError?.message || 'Unknown error'}`);
+          }
         }
       } catch (error) {
         console.error('Error loading audio file:', error);

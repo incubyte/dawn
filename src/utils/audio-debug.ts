@@ -1,4 +1,5 @@
 // Audio debugging utilities
+import { showErrorNotification } from '../ui/components/loading';
 
 let audioEngine: any = null;
 
@@ -24,14 +25,146 @@ export function setupAudioDebug(engine: any): void {
   // Set up periodic updates
   setInterval(updateDebugInfo, 1000);
   
-  // Set up debug panel toggle
+  // Set up debug panel toggle and show it by default to help with debugging
+  showDebugLogsCheckbox.checked = true;
+  debugPanel.style.display = 'block';
+  
   showDebugLogsCheckbox.addEventListener('change', () => {
     debugPanel.style.display = showDebugLogsCheckbox.checked ? 'block' : 'none';
   });
   
+  // Add a track info section
+  const trackInfo = document.createElement('div');
+  trackInfo.innerHTML = '<div style="margin-top: 10px;">Track Info: <span id="track-count">0</span> tracks, <span id="clip-count">0</span> clips</div>';
+  debugPanel.appendChild(trackInfo);
+  
+  // Update track info every second
+  setInterval(() => {
+    if (!audioEngine || !audioEngine.trackService) return;
+    
+    const tracks = audioEngine.trackService.getAllTracks();
+    const trackCountEl = document.getElementById('track-count');
+    const clipCountEl = document.getElementById('clip-count');
+    
+    if (trackCountEl) {
+      trackCountEl.textContent = tracks.length.toString();
+    }
+    
+    if (clipCountEl) {
+      let clipCount = 0;
+      tracks.forEach((track: { clips: any[] }) => {
+        clipCount += track.clips.length;
+      });
+      clipCountEl.textContent = clipCount.toString();
+    }
+  }, 1000);
+  
   // Set up test tone button
   testToneButton.addEventListener('click', () => {
     playTestTone();
+  });
+  
+  // Add a button to check loaded clips
+  const checkClipsButton = document.createElement('button');
+  checkClipsButton.textContent = 'Check Clips';
+  checkClipsButton.style.marginTop = '5px';
+  checkClipsButton.style.marginLeft = '5px';
+  debugPanel.appendChild(checkClipsButton);
+  
+  // Add button to test MP3 support
+  const testMP3Button = document.createElement('button');
+  testMP3Button.textContent = 'Test MP3 Support';
+  testMP3Button.style.marginTop = '5px';
+  testMP3Button.style.marginLeft = '5px';
+  debugPanel.appendChild(testMP3Button);
+  
+  // Add event listener for the MP3 test button
+  testMP3Button.addEventListener('click', async () => {
+    try {
+      console.log('Testing MP3 decoding support...');
+      const statusElement = document.createElement('div');
+      statusElement.style.marginTop = '10px';
+      statusElement.style.color = 'yellow';
+      statusElement.textContent = 'Testing MP3 support...';
+      debugPanel.appendChild(statusElement);
+      
+      // First test with native decoding
+      statusElement.textContent = 'Testing native browser MP3 decoding...';
+      
+      try {
+        // Create a small test MP3 (header only, not real audio)
+        const testMP3 = new Uint8Array([
+          0xFF, 0xFB, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        ]);
+        
+        const audioContext = new AudioContext();
+        await audioContext.decodeAudioData(testMP3.buffer).then(() => {
+          statusElement.textContent = '✓ Your browser supports native MP3 decoding';
+          statusElement.style.color = '#4CAF50';
+        }).catch(err => {
+          statusElement.textContent = '✗ Native MP3 decoding failed: ' + err.message;
+          statusElement.style.color = 'orange';
+        });
+      } catch (error) {
+        statusElement.textContent = '✗ Native MP3 test error: ' + (error instanceof Error ? error.message : String(error));
+        statusElement.style.color = '#F44336';
+      }
+      
+      // Add another status for the library test
+      const libStatusElement = document.createElement('div');
+      libStatusElement.style.marginTop = '5px';
+      libStatusElement.style.color = 'yellow';
+      libStatusElement.textContent = 'Testing mpg123-decoder library...';
+      debugPanel.appendChild(libStatusElement);
+      
+      try {
+        // Dynamic import the decoder
+        const { MPEGDecoder } = await import('mpg123-decoder');
+        const decoder = new MPEGDecoder();
+        await decoder.ready;
+        libStatusElement.textContent = '✓ MP3 decoder library loaded successfully';
+        libStatusElement.style.color = '#4CAF50';
+        decoder.free();
+      } catch (error) {
+        libStatusElement.textContent = '✗ MP3 decoder library failed: ' + (error instanceof Error ? error.message : String(error));
+        libStatusElement.style.color = '#F44336';
+      }
+      
+      // Summary 
+      const summaryElement = document.createElement('div');
+      summaryElement.style.marginTop = '10px';
+      summaryElement.style.fontWeight = 'bold';
+      summaryElement.textContent = 'MP3 files should work on this browser';
+      debugPanel.appendChild(summaryElement);
+      
+    } catch (error) {
+      console.error('Error testing MP3 support:', error);
+      showErrorNotification('Error testing MP3 support: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  });
+  
+  checkClipsButton.addEventListener('click', () => {
+    if (!audioEngine || !audioEngine.trackService) {
+      console.log('Audio engine or track service not available');
+      return;
+    }
+    
+    const tracks = audioEngine.trackService.getAllTracks();
+    console.log(`Found ${tracks.length} tracks:`);
+    
+    tracks.forEach((track: { id: string, clips: any[], muted: boolean, solo: boolean }) => {
+      console.log(`Track ${track.id}: ${track.clips.length} clips, muted: ${track.muted}, solo: ${track.solo}`);
+      
+      if (track.clips.length > 0) {
+        track.clips.forEach((clip: { id: string, name: string, startTime: number, duration: number, buffer: AudioBuffer | null }) => {
+          console.log(`  Clip ${clip.id}: "${clip.name}", startTime: ${clip.startTime}s, duration: ${clip.duration}s, has buffer: ${clip.buffer !== null}`);
+          if (clip.buffer) {
+            console.log(`    Buffer details: ${clip.buffer.duration}s, ${clip.buffer.numberOfChannels} channels, ${clip.buffer.sampleRate}Hz`);
+          }
+        });
+      }
+    });
   });
   
   function updateDebugInfo() {

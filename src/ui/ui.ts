@@ -3,8 +3,9 @@ import { createTrackList } from './components/track-list';
 import { createTimeline } from './components/timeline';
 import { showImportDialog, onImportConfirmed } from './components/file-import';
 import { showLoadingIndicator, hideLoadingIndicator } from './components/loading';
+import { AudioEngine } from '../core/audio-engine';
 
-export function setupUI(): void {
+export function setupUI(audioEngine?: AudioEngine): void {
   const app = document.querySelector<HTMLDivElement>('#app')!;
   app.innerHTML = `
     <div class="daw-container">
@@ -27,7 +28,7 @@ export function setupUI(): void {
     </div>
   `;
 
-  createTransportControls();
+  createTransportControls(audioEngine);
   createTrackList();
   createTimeline();
   
@@ -40,11 +41,11 @@ export function setupUI(): void {
   }
   
   // Setup file import handling
-  setupImportHandling();
+  setupImportHandling(audioEngine);
 }
 
-function setupImportHandling(): void {
-  // We would normally use the audio engine's context here, but we're delegating to events.ts
+function setupImportHandling(_audioEngine?: AudioEngine): void {
+  // Underscore prefix to indicate intentionally unused parameter
   
   onImportConfirmed(async (files) => {
     // Show loading while processing files
