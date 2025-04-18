@@ -75,6 +75,16 @@ export function setupEventHandlers(
     }
   });
   
+  // Listen for clip copy events
+  document.addEventListener('clip:copy', () => {
+    copySelectedClip();
+  });
+  
+  // Listen for clip paste events
+  document.addEventListener('clip:paste', () => {
+    pasteClipToSelectedTrack();
+  });
+  
   // Transport controls - only apply these if we don't have a reference to the AudioEngine
   // (otherwise, they're handled by transport.ts)
   if (!audioEngine) {
@@ -371,8 +381,16 @@ export function setupEventHandlers(
     setupTrackDropZone(trackElement.querySelector('.track-clips'));
   }
   
-  // Global variable to track selected clip
+  // Global variables to track selection and clipboard
   let selectedClipId: string | null = null;
+  let clipboardData: { 
+    clipId: string; 
+    trackId: string; 
+    startTime: number; 
+    duration: number; 
+    audioBuffer: AudioBuffer | null;
+    name: string;
+  } | null = null;
   
   // Function to remove a track
   function removeTrack(trackId: string) {
@@ -437,12 +455,147 @@ export function setupEventHandlers(
     updateTrackWidth();
   }
   
+  // Function to copy the selected clip
+  function copySelectedClip(): boolean {
+    if (!selectedClipId) {
+      console.log('No clip selected to copy');
+      return false;
+    }
+    
+    const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`) as HTMLElement;
+    if (!clipElement) {
+      console.log('Selected clip element not found');
+      return false;
+    }
+    
+    const trackElement = clipElement.closest('.track');
+    if (!trackElement) {
+      console.log('Parent track element not found');
+      return false;
+    }
+    
+    const trackId = trackElement.getAttribute('data-track-id');
+    if (!trackId) {
+      console.log('Track ID not found');
+      return false;
+    }
+    
+    // Find the clip in the track service
+    const track = trackService.getAllTracks().find(t => t.id === trackId);
+    if (!track) {
+      console.log('Track not found in service');
+      return false;
+    }
+    
+    const clip = track.clips.find(c => c.id === selectedClipId);
+    if (!clip) {
+      console.log('Clip not found in track data');
+      return false;
+    }
+    
+    // Store clip data in clipboard
+    clipboardData = {
+      clipId: clip.id,
+      trackId: trackId,
+      startTime: clip.startTime,
+      duration: clip.duration,
+      audioBuffer: clip.buffer,
+      name: clip.name
+    };
+    
+    console.log(`Copied clip "${clip.name}" to clipboard`);
+    
+    // Visual feedback
+    // Visual feedback - flash effect
+    clipElement.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.7)';
+    clipElement.style.transform = 'scale(1.02)';
+    setTimeout(() => {
+      clipElement.style.boxShadow = '';
+      clipElement.style.transform = '';
+    }, 300);
+    
+    // Show toast notification
+    const notification = document.createElement('div');
+    notification.className = 'toast-notification';
+    notification.textContent = 'Clip copied';
+    document.body.appendChild(notification);
+    
+    // Show and then hide the notification
+    setTimeout(() => {
+      notification.classList.add('visible');
+      setTimeout(() => {
+        notification.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300); // Wait for fade-out animation
+      }, 1500); // Show for 1.5 seconds
+    }, 10);
+    
+    return true;
+  }
+  
+  // Function to paste the copied clip to the selected track
+  function pasteClipToSelectedTrack(): boolean {
+    if (!clipboardData || !clipboardData.audioBuffer) {
+      console.log('No valid clip in clipboard');
+      return false;
+    }
+    
+    if (!selectedTrackId) {
+      console.log('No track selected for paste operation');
+      return false;
+    }
+    
+    // Create a new clip based on the clipboard data
+    const newClip: AudioClip = {
+      id: crypto.randomUUID(),
+      buffer: clipboardData.audioBuffer,
+      // Position it at cursor or slightly offset from the original
+      startTime: clipboardData.startTime, 
+      duration: clipboardData.duration,
+      offset: 0,
+      name: `${clipboardData.name} (copy)`
+    };
+    
+    // Add the clip to the selected track
+    addClipToTrack(selectedTrackId, newClip);
+    
+    console.log(`Pasted clip "${newClip.name}" to track ${selectedTrackId}`);
+    
+    // Visual feedback for the track
+    const trackElement = document.querySelector(`[data-track-id="${selectedTrackId}"]`);
+    if (trackElement) {
+      trackElement.classList.add('paste-highlight');
+      setTimeout(() => {
+        trackElement.classList.remove('paste-highlight');
+      }, 300);
+    }
+    
+    // Show toast notification
+    const notification = document.createElement('div');
+    notification.className = 'toast-notification';
+    notification.textContent = 'Clip pasted';
+    document.body.appendChild(notification);
+    
+    // Show and then hide the notification
+    setTimeout(() => {
+      notification.classList.add('visible');
+      setTimeout(() => {
+        notification.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300); // Wait for fade-out animation
+      }, 1500); // Show for 1.5 seconds
+    }, 10);
+    
+    return true;
+  }
+  
   // Function to handle keyboard shortcuts
   function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
       // Handle delete key (Delete or Backspace)
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        
         // First priority: If a clip is selected, delete that
         if (selectedClipId) {
           const clipElement = document.querySelector(`[data-clip-id="${selectedClipId}"]`);
@@ -461,6 +614,22 @@ export function setupEventHandlers(
         // Second priority: If a track is selected and no clip is selected, delete the track
         if (selectedTrackId && !selectedClipId) {
           removeTrack(selectedTrackId);
+        }
+      }
+      
+      // Copy clip with Ctrl+C or Cmd+C
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (copySelectedClip()) {
+          // Prevent default browser copy behavior
+          e.preventDefault();
+        }
+      }
+      
+      // Paste clip with Ctrl+V or Cmd+V
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (pasteClipToSelectedTrack()) {
+          // Prevent default browser paste behavior
+          e.preventDefault();
         }
       }
     });

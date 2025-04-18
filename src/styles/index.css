@@ -93,6 +93,21 @@ body {
   transform: scale(0.95);
 }
 
+#copy-button, #paste-button {
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+}
+
+#copy-button:hover, #paste-button:hover {
+  background-color: rgba(0, 120, 215, 0.2);
+  color: var(--primary-color);
+}
+
+#copy-button:active, #paste-button:active {
+  background-color: rgba(0, 120, 215, 0.3);
+  transform: scale(0.95);
+}
+
 #delete-clip-button, #delete-track-button {
   background-color: var(--secondary-color);
   color: #e74c3c;
@@ -337,6 +352,16 @@ body {
 
 .track.selected .track-clips {
   background-color: rgba(50, 50, 50, 0.7);
+}
+
+.track.paste-highlight {
+  animation: paste-flash 0.3s;
+}
+
+@keyframes paste-flash {
+  0% { background-color: rgba(0, 120, 215, 0.1); }
+  50% { background-color: rgba(76, 175, 80, 0.3); }
+  100% { background-color: rgba(0, 120, 215, 0.1); }
 }
 
 .track-header {
@@ -705,6 +730,27 @@ body {
 .error-notification.visible {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 120, 215, 0.9);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast-notification.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* Modal Dialog */

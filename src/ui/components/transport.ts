@@ -21,6 +21,12 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
       <span id="current-time">00:00:000</span>
     </div>
     <div class="transport-buttons">
+      <button id="copy-button" class="transport-button" title="Copy Selected Clip (Ctrl+C)">
+        <span class="icon">📋</span>
+      </button>
+      <button id="paste-button" class="transport-button" title="Paste to Selected Track (Ctrl+V)">
+        <span class="icon">📄</span>
+      </button>
       <button id="delete-clip-button" class="transport-button" title="Delete Selected Clip">
         <span class="icon">🗑️</span>
       </button>
@@ -46,7 +52,10 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   const playButton = document.getElementById('play-button');
   const pauseButton = document.getElementById('pause-button');
   const stopButton = document.getElementById('stop-button');
+  const copyButton = document.getElementById('copy-button');
+  const pasteButton = document.getElementById('paste-button');
   const deleteClipButton = document.getElementById('delete-clip-button');
+  const deleteTrackButton = document.getElementById('delete-track-button');
   const exportButton = document.getElementById('export-button');
   
   if (playButton && audioEngine) {
@@ -152,8 +161,35 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
     });
   }
   
+  // Copy button
+  if (copyButton) {
+    copyButton.addEventListener('click', () => {
+      console.log('Copy button clicked');
+      
+      // Dispatch a custom event for copying the selected clip
+      const copyEvent = new CustomEvent('clip:copy', {
+        bubbles: true
+      });
+      
+      document.dispatchEvent(copyEvent);
+    });
+  }
+  
+  // Paste button
+  if (pasteButton) {
+    pasteButton.addEventListener('click', () => {
+      console.log('Paste button clicked');
+      
+      // Dispatch a custom event for pasting to the selected track
+      const pasteEvent = new CustomEvent('clip:paste', {
+        bubbles: true
+      });
+      
+      document.dispatchEvent(pasteEvent);
+    });
+  }
+  
   // Delete track button
-  const deleteTrackButton = document.getElementById('delete-track-button');
   if (deleteTrackButton) {
     deleteTrackButton.addEventListener('click', () => {
       console.log('Delete track button clicked');
