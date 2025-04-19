@@ -26,8 +26,9 @@ export function setupAudioDebug(engine: any): void {
   setInterval(updateDebugInfo, 1000);
   
   // Set up debug panel toggle and show it by default to help with debugging
-  showDebugLogsCheckbox.checked = true;
-  debugPanel.style.display = 'block';
+  // NOTE: Make display block to debug
+  showDebugLogsCheckbox.checked = false;
+  debugPanel.style.display = 'none';
   
   showDebugLogsCheckbox.addEventListener('change', () => {
     debugPanel.style.display = showDebugLogsCheckbox.checked ? 'block' : 'none';
