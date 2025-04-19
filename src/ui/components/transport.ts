@@ -7,7 +7,7 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
 
   transportContainer.innerHTML = `
     <div class="transport-buttons">
-      <button id="play-toggle-button" class="transport-button" title="Play/Pause (Space)">
+      <button id="play-toggle-button" class="transport-button" title="Play/Pause">
         <span class="icon">▶</span>
       </button>
       <button id="stop-button" class="transport-button" title="Stop">
@@ -631,30 +631,6 @@ function startTimeUpdate(audioEngine: AudioEngine): void {
 function setupKeyboardShortcuts(audioEngine?: AudioEngine): void {
   if (!audioEngine) return;
   
-  // Add event listener to document for spacebar press
-  document.addEventListener('keydown', (event) => {
-    // Skip if user is typing in an input or textarea
-    if (
-      event.target instanceof HTMLInputElement || 
-      event.target instanceof HTMLTextAreaElement ||
-      (event.target as HTMLElement).contentEditable === 'true'
-    ) {
-      return;
-    }
-    
-    // Spacebar toggles play/pause
-    if (event.code === 'Space' || event.key === ' ') {
-      event.preventDefault(); // Prevent scrolling the page
-      
-      console.log(`Spacebar pressed, isPlaying: ${audioEngine.isPlaying}`);
-      
-      // Trigger the play/pause toggle button click event
-      const playToggleButton = document.getElementById('play-toggle-button');
-      if (playToggleButton) {
-        playToggleButton.click();
-      }
-    }
-  });
-  
-  console.log('Keyboard shortcuts set up successfully');
+  // No spacebar functionality as requested
+  console.log('No keyboard shortcuts enabled');
 }
