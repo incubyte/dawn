@@ -1364,6 +1364,7 @@ body {
   height: 80px;
   margin-bottom: 1rem;
   max-width: 100%;
+  filter: invert(1);
 }
 
 .welcome-header h1 {
