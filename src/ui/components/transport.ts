@@ -7,11 +7,8 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
 
   transportContainer.innerHTML = `
     <div class="transport-buttons">
-      <button id="play-button" class="transport-button" title="Play">
+      <button id="play-toggle-button" class="transport-button" title="Play/Pause (Space)">
         <span class="icon">▶</span>
-      </button>
-      <button id="pause-button" class="transport-button" title="Pause">
-        <span class="icon">⏸</span>
       </button>
       <button id="stop-button" class="transport-button" title="Stop">
         <span class="icon">■</span>
@@ -58,11 +55,13 @@ export function createTransportControls(audioEngine?: AudioEngine): void {
   if (audioEngine) {
     startTimeUpdate(audioEngine);
   }
+  
+  // Set up global keyboard shortcuts
+  setupKeyboardShortcuts(audioEngine);
 }
 
 function setupTransportHandlers(audioEngine?: AudioEngine): void {
-  const playButton = document.getElementById('play-button');
-  const pauseButton = document.getElementById('pause-button');
+  const playToggleButton = document.getElementById('play-toggle-button');
   const stopButton = document.getElementById('stop-button');
   const copyButton = document.getElementById('copy-button');
   const pasteButton = document.getElementById('paste-button');
@@ -74,42 +73,56 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
   const loadButton = document.getElementById('load-button');
   const exportButton = document.getElementById('export-button');
   
-  if (playButton && audioEngine) {
-    playButton.addEventListener('click', async () => {
-      try {
+  // Function to toggle play/pause state
+  const togglePlayPause = async () => {
+    try {
+      if (!audioEngine) return;
+      
+      // Check if currently playing
+      if (audioEngine.isPlaying) {
+        // Pause playback
+        console.log('Pausing playback');
+        audioEngine.pausePlayback();
+        
+        // Update button icon to show play
+        if (playToggleButton) {
+          playToggleButton.querySelector('.icon')!.textContent = '▶';
+          playToggleButton.classList.remove('active');
+        }
+        
+        console.log('Playback paused successfully');
+      } else {
         // First ensure the audio context is running
         if (audioEngine.audioContext.state === 'suspended') {
           console.log('Resuming audio context on play click...');
           await audioEngine.audioContext.resume();
         }
         
-        console.log('Play button clicked, starting playback');
+        console.log('Starting playback');
         
         // Start playback with explicit logging
         console.log('Calling audioEngine.startPlayback()...');
         audioEngine.startPlayback();
-        console.log('Playback started successfully');
         
-        // Update UI
-        playButton.classList.add('active');
-        if (pauseButton) pauseButton.classList.remove('active');
+        // Update button icon to show pause
+        if (playToggleButton) {
+          playToggleButton.querySelector('.icon')!.textContent = '⏸';
+          playToggleButton.classList.add('active');
+        }
+        
+        // Remove active class from stop button
         if (stopButton) stopButton.classList.remove('active');
-      } catch (error) {
-        console.error('Error starting playback:', error);
+        
+        console.log('Playback started successfully');
       }
-    });
-  }
+    } catch (error) {
+      console.error('Error toggling playback:', error);
+    }
+  };
   
-  if (pauseButton && audioEngine) {
-    pauseButton.addEventListener('click', () => {
-      console.log('Pause button clicked');
-      
-      audioEngine.pausePlayback();
-      
-      // Update UI
-      pauseButton.classList.add('active');
-      if (playButton) playButton.classList.remove('active');
-    });
+  // Play/Pause toggle button
+  if (playToggleButton && audioEngine) {
+    playToggleButton.addEventListener('click', togglePlayPause);
   }
   
   if (stopButton && audioEngine) {
@@ -124,8 +137,13 @@ function setupTransportHandlers(audioEngine?: AudioEngine): void {
         
         // Update UI
         stopButton.classList.add('active');
-        if (playButton) playButton.classList.remove('active');
-        if (pauseButton) pauseButton.classList.remove('active');
+        
+        // Reset play button to show play icon
+        const playToggleButton = document.getElementById('play-toggle-button');
+        if (playToggleButton) {
+          playToggleButton.classList.remove('active');
+          playToggleButton.querySelector('.icon')!.textContent = '▶';
+        }
         
         // Reset time display
         const timeDisplay = document.getElementById('current-time');
@@ -607,4 +625,36 @@ function startTimeUpdate(audioEngine: AudioEngine): void {
   
   // Start the update loop
   updateTime();
+}
+
+// Handle global keyboard shortcuts
+function setupKeyboardShortcuts(audioEngine?: AudioEngine): void {
+  if (!audioEngine) return;
+  
+  // Add event listener to document for spacebar press
+  document.addEventListener('keydown', (event) => {
+    // Skip if user is typing in an input or textarea
+    if (
+      event.target instanceof HTMLInputElement || 
+      event.target instanceof HTMLTextAreaElement ||
+      (event.target as HTMLElement).contentEditable === 'true'
+    ) {
+      return;
+    }
+    
+    // Spacebar toggles play/pause
+    if (event.code === 'Space' || event.key === ' ') {
+      event.preventDefault(); // Prevent scrolling the page
+      
+      console.log(`Spacebar pressed, isPlaying: ${audioEngine.isPlaying}`);
+      
+      // Trigger the play/pause toggle button click event
+      const playToggleButton = document.getElementById('play-toggle-button');
+      if (playToggleButton) {
+        playToggleButton.click();
+      }
+    }
+  });
+  
+  console.log('Keyboard shortcuts set up successfully');
 }
