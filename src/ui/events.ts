@@ -130,7 +130,7 @@ export function setupEventHandlers(
     console.log(`Adding UI for ${tracks.length} tracks`);
     
     tracks.forEach(track => {
-      console.log(`Adding UI for track ${track.id} with ${track.clips.length} clips`);
+      console.log(`Adding UI for track ${track.id} with ${track.clips.length} clips and ${track.effects.length} effects`);
       addTrackToUI(track);
       
       // Verify clip elements were added
@@ -138,6 +138,16 @@ export function setupEventHandlers(
       if (trackElement) {
         const clipElements = trackElement.querySelectorAll('.audio-clip');
         console.log(`Track ${track.id} now has ${clipElements.length} clip elements in the UI`);
+        
+        // Update effects button state
+        const effectsButton = trackElement.querySelector('.effects-button');
+        if (effectsButton && track.effects.length > 0) {
+          const hasActiveEffects = track.effects.some(effect => !effect.bypass);
+          if (hasActiveEffects) {
+            effectsButton.classList.add('active');
+            console.log(`Track ${track.id} has active effects - highlighting effects button`);
+          }
+        }
       }
     });
     

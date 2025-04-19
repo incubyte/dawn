@@ -1,5 +1,8 @@
 import { AudioClip } from '../models/audio-clip';
+import { Effect, EffectType } from '../models/effect';
 import { TrackService } from './track-service';
+import { createReverbEffect } from '../effects/reverb';
+import { createDelayEffect } from '../effects/delay';
 import JSZip from 'jszip';
 
 // Define a serializable project format
@@ -17,6 +20,22 @@ export interface SerializableTrack {
   muted: boolean;
   solo: boolean;
   clips: SerializableClip[];
+  effects: SerializableEffect[];
+}
+
+export interface SerializableEffect {
+  id: string;
+  type: string;
+  bypass: boolean;
+  parameters: SerializableEffectParameter[];
+}
+
+export interface SerializableEffectParameter {
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
 }
 
 export interface SerializableClip {
@@ -77,13 +96,31 @@ export function createProjectService(
         serializedClips.push(serializedClip);
       }
       
+      // Serialize track effects
+      const serializedEffects: SerializableEffect[] = track.effects.map(effect => {
+        // Create a serializable effect without the AudioNode
+        return {
+          id: effect.id,
+          type: effect.type,
+          bypass: effect.bypass,
+          parameters: effect.parameters.map(param => ({
+            name: param.name,
+            value: param.value,
+            min: param.min,
+            max: param.max,
+            step: param.step
+          }))
+        };
+      });
+      
       // Create a serializable track
       const serializedTrack: SerializableTrack = {
         id: track.id,
         gainValue: track.gainValue,
         muted: track.muted,
         solo: track.solo,
-        clips: serializedClips
+        clips: serializedClips,
+        effects: serializedEffects
       };
       
       serializedTracks.push(serializedTrack);
@@ -242,6 +279,50 @@ export function createProjectService(
           trackService.setTrackVolume(track.id, serializedTrack.gainValue);
           if (serializedTrack.muted) trackService.toggleMute(track.id);
           if (serializedTrack.solo) trackService.toggleSolo(track.id);
+          
+          // Restore effects if present
+          if (serializedTrack.effects && serializedTrack.effects.length > 0) {
+            console.log(`Restoring ${serializedTrack.effects.length} effects for track ${track.id}`);
+            
+            for (const serializedEffect of serializedTrack.effects) {
+              console.log(`Restoring effect: ${serializedEffect.type} (${serializedEffect.id})`);
+              
+              try {
+                // Create a new effect instance based on the type
+                let effect: Effect | null = null;
+                
+                if (serializedEffect.type === 'reverb') {
+                  effect = createReverbEffect(audioContext);
+                } 
+                else if (serializedEffect.type === 'delay') {
+                  effect = createDelayEffect(audioContext);
+                }
+                
+                if (effect) {
+                  // Override the generated ID with the saved ID for continuity
+                  effect.id = serializedEffect.id;
+                  
+                  // Apply bypass state
+                  effect.bypass = serializedEffect.bypass;
+                  
+                  // Add the effect to the track first (this creates all the necessary audio nodes)
+                  trackService.addEffectToTrack(track.id, effect);
+                  
+                  // Apply saved parameter values
+                  for (const savedParam of serializedEffect.parameters) {
+                    // Find the matching parameter in the created effect
+                    const paramIndex = effect.parameters.findIndex(p => p.name === savedParam.name);
+                    if (paramIndex >= 0) {
+                      // Update the parameter through the track service to ensure proper audio routing
+                      trackService.updateEffectParameter(track.id, effect.id, savedParam.name, savedParam.value);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error(`Failed to restore effect ${serializedEffect.type}:`, error);
+              }
+            }
+          }
           
           // Load clips for this track
           for (const serializedClip of serializedTrack.clips) {
