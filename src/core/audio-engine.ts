@@ -219,16 +219,25 @@ export function setupAudioEngine(): AudioEngine {
             }
             
             // Connect to the track's gain node or effect chain
-            // If the track has active effects, the trackGainNode will be connected
-            // to the first effect node in rebuildEffectChain() in the TrackService
+            // This gain node will be connected to the first effect in the chain (if any)
+            // or directly to the master gain node if no effects exist
             source.connect(trackGainNode);
             console.log(`Clip ${clip.id} source connected to gain node (which may be connected to effects chain)`);
             
             // Make sure the effect chain is properly rebuilt before playback
-            // This ensures all effects are connected correctly
+            // This ensures all effects are connected correctly and parameters are applied
             if (track.effects.length > 0) {
               console.log(`Track ${track.id} has ${track.effects.length} effects, rebuilding effect chain`);
+              
+              // First apply parameters to all effects to ensure they have the correct settings
+              track.effects.forEach(effect => {
+                trackService.applyEffectParameters(effect);
+              });
+              
+              // Then rebuild the effect chain to ensure proper connections
               trackService.rebuildEffectChain(track.id);
+              
+              console.log(`Effect chain rebuilt for track ${track.id}`);
             }
             
             // Calculate when this clip should start in context time

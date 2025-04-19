@@ -164,6 +164,9 @@ export function createTrackService(
       // Add to effects array in the track data
       track.effects.push(effect);
       
+      // Apply initial parameters to ensure effect is properly configured
+      this.applyEffectParameters(effect);
+      
       // Rebuild the effect chain
       this.rebuildEffectChain(trackId);
       
@@ -214,9 +217,13 @@ export function createTrackService(
         return;
       }
       
+      // Log the rebuilding process
+      console.log(`Rebuilding effect chain for track ${trackId} with ${track.effects.length} total effects`);
+      
       // Disconnect existing effect chain if any
       if (trackNode.effectChain && trackNode.effectChain.length > 0) {
         console.log(`Disconnecting existing effect chain with ${trackNode.effectChain.length} effects`);
+        
         // Disconnect gain node from everything
         trackNode.gainNode.disconnect();
         
@@ -226,9 +233,11 @@ export function createTrackService(
             // Use the custom disconnect method if available
             if (typeof (node as any).disconnect === 'function') {
               (node as any).disconnect();
+              console.log(`Disconnected effect node using custom method`);
             } else {
               // Default disconnect
               node.disconnect();
+              console.log(`Disconnected effect node using default method`);
             }
           } catch (err) {
             console.warn(`Error disconnecting node:`, err);
@@ -239,94 +248,130 @@ export function createTrackService(
         trackNode.effectChain = [];
       } else {
         // No effect chain yet, just disconnect gain node from master
+        console.log(`No existing effect chain, disconnecting gain node from master`);
         trackNode.gainNode.disconnect();
       }
       
-      if (track.effects.length === 0) {
-        // No effects, connect gain directly to master
-        console.log(`No effects for track ${trackId}, connecting gain directly to master`);
+      if (track.effects.length === 0 || track.effects.every(effect => effect.bypass)) {
+        // No effects or all effects are bypassed, connect gain directly to master
+        console.log(`No active effects for track ${trackId}, connecting gain directly to master`);
         trackNode.gainNode.connect(masterGainNode);
         return;
       }
       
-      // Create a new effect chain
+      // Create a new effect chain with only active (non-bypassed) effects
       const effectNodes: AudioNode[] = [];
+      const activeEffects = track.effects.filter(effect => !effect.bypass && effect.node);
       
-      // Process each effect and create the chain
-      track.effects.forEach((effect) => {
-        if (effect.bypass) {
-          console.log(`Effect ${effect.id} (${effect.type}) is bypassed, skipping`);
-          return;
-        }
-        
-        if (!effect.node) {
-          console.warn(`Effect ${effect.id} has no audio node, skipping`);
-          return;
-        }
-        
-        console.log(`Adding ${effect.type} effect to chain for track ${trackId}`);
-        effectNodes.push(effect.node);
+      // Process each active effect
+      activeEffects.forEach((effect) => {
+        console.log(`Adding ${effect.type} effect (id: ${effect.id}) to chain for track ${trackId}`);
         
         // Apply parameters to make sure they're current
         this.applyEffectParameters(effect);
+        
+        // Add to effect nodes list
+        effectNodes.push(effect.node!);
       });
       
       // Store the effect chain
       trackNode.effectChain = effectNodes;
       
       if (effectNodes.length === 0) {
-        // No active effects, connect gain directly to master
-        console.log(`No active effects for track ${trackId}, connecting gain directly to master`);
+        // No active effects after filtering, connect gain directly to master
+        console.log(`No active effects for track ${trackId} after filtering, connecting gain directly to master`);
         trackNode.gainNode.connect(masterGainNode);
         return;
       }
       
-      // Connect the chain
+      // ========== CONNECT THE CHAIN ==========
+      
       // First connect gain node to first effect
-      console.log(`Connecting gain node to first effect in chain`);
+      console.log(`Connecting track gain node to first effect in chain: ${activeEffects[0].type}`);
       trackNode.gainNode.connect(effectNodes[0]);
       
       // Connect effects in sequence
       for (let i = 0; i < effectNodes.length - 1; i++) {
-        console.log(`Connecting effect ${i} to effect ${i + 1}`);
+        const currentEffect = activeEffects[i];
+        const nextEffect = activeEffects[i + 1];
+        
+        console.log(`Connecting effect ${i}: ${currentEffect.type} to effect ${i + 1}: ${nextEffect.type}`);
         
         try {
-          // Use custom connect method if available
-          if (typeof (effectNodes[i] as any).connect === 'function') {
+          // First try using the custom connect method if available
+          // This allows effects to use their own connection logic for proper routing
+          if (typeof (effectNodes[i] as any).connect === 'function' && 
+              (effectNodes[i] as any).connect !== AudioNode.prototype.connect) {
+            console.log(`Using custom connect method for effect ${currentEffect.type}`);
             (effectNodes[i] as any).connect(effectNodes[i + 1]);
-          } else {
-            // Default connect
+          } 
+          // If there's an effectObj with a connect method, use that
+          else if ((effectNodes[i] as any).effectObj && 
+                   typeof (effectNodes[i] as any).effectObj.connect === 'function') {
+            console.log(`Using effectObj connect method for effect ${currentEffect.type}`);
+            (effectNodes[i] as any).effectObj.connect(effectNodes[i + 1]);
+          }
+          // Default to the standard Web Audio API connect
+          else {
+            console.log(`Using standard connect method for effect ${currentEffect.type}`);
+            effectNodes[i].disconnect(); // Ensure clean connections
             effectNodes[i].connect(effectNodes[i + 1]);
           }
         } catch (err) {
           console.error(`Error connecting effect ${i} to effect ${i + 1}:`, err);
-          // Fallback to direct connection
-          effectNodes[i].connect(effectNodes[i + 1]);
+          // Fallback to direct connection in case of error
+          try {
+            effectNodes[i].disconnect();
+            effectNodes[i].connect(effectNodes[i + 1]);
+            console.log(`Connected using fallback direct connection`);
+          } catch (fallbackErr) {
+            console.error(`Even fallback connection failed:`, fallbackErr);
+          }
         }
       }
       
-      // Connect last effect to master
+      // Connect last effect to master gain node
       const lastEffect = effectNodes[effectNodes.length - 1];
-      console.log(`Connecting last effect to master gain node`);
+      const lastEffectData = activeEffects[activeEffects.length - 1];
+      console.log(`Connecting last effect (${lastEffectData.type}) to master gain node`);
       
       try {
-        // Use custom connect method if available
-        if (typeof (lastEffect as any).connect === 'function') {
+        // Try using custom connect method first
+        if (typeof (lastEffect as any).connect === 'function' && 
+            (lastEffect as any).connect !== AudioNode.prototype.connect) {
+          console.log(`Using custom connect method for last effect`);
           (lastEffect as any).connect(masterGainNode);
-        } else {
-          // Default connect
+        }
+        // If there's an effectObj with a connect method, use that
+        else if ((lastEffect as any).effectObj && 
+                 typeof (lastEffect as any).effectObj.connect === 'function') {
+          console.log(`Using effectObj connect method for last effect`);
+          (lastEffect as any).effectObj.connect(masterGainNode);
+        }
+        // Default to standard Web Audio API connect
+        else {
+          console.log(`Using standard connect method for last effect`);
+          lastEffect.disconnect(); // Ensure clean connections
           lastEffect.connect(masterGainNode);
         }
       } catch (err) {
         console.error(`Error connecting last effect to master:`, err);
         // Fallback to direct connection
-        lastEffect.connect(masterGainNode);
+        try {
+          lastEffect.disconnect();
+          lastEffect.connect(masterGainNode);
+          console.log(`Connected last effect using fallback direct connection`);
+        } catch (fallbackErr) {
+          console.error(`Even fallback connection for last effect failed:`, fallbackErr);
+        }
       }
       
-      console.log(`Rebuilt effect chain for track ${trackId} with ${effectNodes.length} active effects`);
+      console.log(`Successfully rebuilt effect chain for track ${trackId} with ${effectNodes.length} active effects`);
     },
     
     updateEffectParameter(trackId: string, effectId: string, paramName: string, value: number): void {
+      console.log(`Updating effect parameter: track=${trackId}, effect=${effectId}, param=${paramName}, value=${value}`);
+      
       const track = tracks.get(trackId);
       
       if (!track) {
@@ -351,20 +396,56 @@ export function createTrackService(
       // Clamp the value between min and max
       const clampedValue = Math.max(parameter.min, Math.min(parameter.max, value));
       
-      // Update the parameter value
+      // Update the parameter value in the data model
       parameter.value = clampedValue;
       
-      // Apply the parameter change to the audio node
-      this.applyEffectParameters(effect);
-      
-      // If the parameter change might affect the audio routing (like a wet/dry mix),
-      // we might need to rebuild the chain to make sure all connections are correct
-      if (paramName === 'Mix') {
-        console.log(`Mix parameter changed, rebuilding effect chain to ensure proper routing`);
-        this.rebuildEffectChain(trackId);
+      if (!effect.node) {
+        console.warn(`Effect ${effectId} has no audio node to apply parameter changes to`);
+        return;
       }
       
-      console.log(`Updated ${effect.type} parameter ${paramName} to ${clampedValue} on track ${trackId}`);
+      // Apply parameter to the effect node - this is the critical part
+      try {
+        // Direct parameter application based on effect type and parameter name
+        if (effect.type === 'delay') {
+          if (paramName === 'Time' && typeof (effect.node as any).setDelayTime === 'function') {
+            console.log(`Directly setting delay time to ${clampedValue}`);
+            (effect.node as any).setDelayTime(clampedValue);
+          } 
+          else if (paramName === 'Feedback' && typeof (effect.node as any).setFeedback === 'function') {
+            console.log(`Directly setting delay feedback to ${clampedValue}`);
+            (effect.node as any).setFeedback(clampedValue);
+          }
+          else if (paramName === 'Mix' && typeof (effect.node as any).setMix === 'function') {
+            console.log(`Directly setting delay mix to ${clampedValue}`);
+            (effect.node as any).setMix(clampedValue);
+          }
+        } 
+        else if (effect.type === 'reverb') {
+          if (paramName === 'Time' && typeof (effect.node as any).setReverbTime === 'function') {
+            console.log(`Directly setting reverb time to ${clampedValue}`);
+            (effect.node as any).setReverbTime(clampedValue);
+          }
+          else if (paramName === 'Mix' && typeof (effect.node as any).setMix === 'function') {
+            console.log(`Directly setting reverb mix to ${clampedValue}`);
+            (effect.node as any).setMix(clampedValue);
+          }
+        }
+        
+        // Also call the general applyEffectParameters as a backup approach
+        this.applyEffectParameters(effect);
+        
+        // If the parameter change might affect the audio routing (like a wet/dry mix),
+        // we need to rebuild the chain to make sure all connections are correct
+        if (paramName === 'Mix') {
+          console.log(`Mix parameter changed, rebuilding effect chain to ensure proper routing`);
+          this.rebuildEffectChain(trackId);
+        }
+        
+        console.log(`Successfully updated ${effect.type} parameter ${paramName} to ${clampedValue} on track ${trackId}`);
+      } catch (error) {
+        console.error(`Error applying parameter ${paramName} to ${effect.type} effect:`, error);
+      }
       
       // Dispatch event for track changed
       document.dispatchEvent(new CustomEvent('track:changed', {

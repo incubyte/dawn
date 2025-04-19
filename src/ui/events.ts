@@ -388,6 +388,7 @@ export function setupEventHandlers(
         <div class="track-controls">
           <button class="mute-button" title="Mute">M</button>
           <button class="solo-button" title="Solo">S</button>
+          <button class="effects-button" title="Effects">FX</button>
           <div class="track-name" title="${trackName}">${trackName}</div>
           <button class="delete-track-btn" title="Delete Track">✕</button>
         </div>
@@ -395,10 +396,6 @@ export function setupEventHandlers(
           <span class="volume-label">Volume</span>
           <input type="range" min="0" max="1" step="0.01" value="1" class="gain-slider" title="Volume">
           <span class="volume-display">100%</span>
-        </div>
-        <div class="track-effects">
-          <div class="effects-title">Effects <button class="add-effect-btn" title="Add Effect">+</button></div>
-          <div class="effects-list"></div>
         </div>
       </div>
       <div class="track-clips"></div>
@@ -411,6 +408,7 @@ export function setupEventHandlers(
       if (
         target.classList.contains('mute-button') || 
         target.classList.contains('solo-button') || 
+        target.classList.contains('effects-button') ||
         target.classList.contains('delete-track-btn') ||
         target.tagName === 'INPUT'
       ) {
@@ -592,33 +590,93 @@ export function setupEventHandlers(
     setupEffectsPanel(trackElement, track);
   }
   
-  // Function to set up the effects panel for a track
+  // Function to set up the effects button for a track
   function setupEffectsPanel(trackElement: HTMLElement, track: AudioTrack): void {
-    const effectsList = trackElement.querySelector('.effects-list') as HTMLElement;
-    const addEffectBtn = trackElement.querySelector('.add-effect-btn') as HTMLElement;
+    const effectsButton = trackElement.querySelector('.effects-button') as HTMLElement;
     
-    if (!effectsList || !addEffectBtn) {
-      console.warn('Effects panel elements not found');
+    if (!effectsButton) {
+      console.warn('Effects button not found');
       return;
     }
     
-    // Add existing effects to the UI
-    track.effects.forEach(effect => {
-      addEffectToUI(effect, effectsList, track);
-    });
+    // Highlight effects button if track has effects
+    if (track.effects && track.effects.length > 0) {
+      const hasActiveEffects = track.effects.some(effect => !effect.bypass);
+      effectsButton.classList.toggle('active', hasActiveEffects);
+    }
     
-    // Set up add effect button
-    addEffectBtn.addEventListener('click', () => {
+    // Set up effects button click event
+    effectsButton.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent track selection
+      
       if (!track || !audioEngine) return;
       
-      showEffectSelectionDialog(track.id);
+      // Show effects manager modal
+      showEffectsManagerModal(track);
     });
   }
   
-  // Show dialog for selecting which effect to add
-  function showEffectSelectionDialog(trackId: string): void {
+  // Show effects manager modal for a track
+  function showEffectsManagerModal(track: AudioTrack): void {
+    // Create modal dialog
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog';
+    dialog.innerHTML = `
+      <div class="modal-content effects-manager">
+        <div class="modal-header">
+          <h2>Track Effects</h2>
+          <button class="close-button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="effects-actions">
+            <button class="add-effect-btn primary-button">Add Effect</button>
+          </div>
+          <div class="effects-list"></div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // Show dialog with animation
+    setTimeout(() => {
+      dialog.classList.add('visible');
+    }, 10);
+    
+    // Close button functionality
+    const closeButton = dialog.querySelector('.close-button');
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        dialog.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(dialog);
+        }, 300);
+      });
+    }
+    
+    // Set up add effect button
+    const addEffectBtn = dialog.querySelector('.add-effect-btn');
+    if (addEffectBtn) {
+      addEffectBtn.addEventListener('click', () => {
+        showEffectSelectionDialog(track.id, dialog);
+      });
+    }
+    
+    // Populate effects list
+    const effectsList = dialog.querySelector('.effects-list');
+    if (effectsList && track.effects.length > 0) {
+      track.effects.forEach(effect => {
+        addEffectToUI(effect, effectsList as HTMLElement, track);
+      });
+    } else if (effectsList) {
+      effectsList.innerHTML = '<div class="no-effects-message">No effects added to this track yet.</div>';
+    }
+  }
+  
+  // Show dialog for selecting which effect to add
+  function showEffectSelectionDialog(trackId: string, parentDialog?: HTMLElement): void {
+    const dialog = document.createElement('div');
+    dialog.className = 'modal-dialog effect-selection-dialog';
     dialog.innerHTML = `
       <div class="modal-content">
         <div class="modal-header">
@@ -685,13 +743,28 @@ export function setupEventHandlers(
             console.log(`Adding ${effectType} effect to track ${trackId}`);
             audioEngine.trackService.addEffectToTrack(trackId, effect);
             
-            // Find track and update UI
+            // Get the track for UI updates
+            const track = audioEngine.trackService.getAllTracks().find(t => t.id === trackId);
+            
+            // Update track element to show effects status
             const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
             if (trackElement) {
-              const effectsList = trackElement.querySelector('.effects-list');
-              const track = audioEngine.trackService.getAllTracks().find(t => t.id === trackId);
-              
-              if (effectsList && track) {
+              const effectsButton = trackElement.querySelector('.effects-button');
+              if (effectsButton) {
+                effectsButton.classList.add('active');
+              }
+            }
+            
+            // If we have a parent dialog (effects manager), update it with the new effect
+            if (parentDialog && track) {
+              const effectsList = parentDialog.querySelector('.effects-list');
+              if (effectsList) {
+                // Clear 'no effects' message if it exists
+                if (effectsList.querySelector('.no-effects-message')) {
+                  effectsList.innerHTML = '';
+                }
+                
+                // Add the new effect to the UI
                 addEffectToUI(effect, effectsList as HTMLElement, track);
               }
             }
@@ -818,6 +891,17 @@ export function setupEventHandlers(
         bypassButton.title = isBypassed ? 'Enable' : 'Bypass';
         effectElement.classList.toggle('effect-bypass', isBypassed);
         bypassButton.classList.toggle('active', isBypassed);
+        
+        // Update the effects button on the track
+        const trackElement = document.querySelector(`[data-track-id="${track.id}"]`);
+        if (trackElement) {
+          const effectsButton = trackElement.querySelector('.effects-button');
+          if (effectsButton) {
+            // Check if any effects are active (not bypassed)
+            const hasActiveEffects = track.effects.some(e => !e.bypass);
+            effectsButton.classList.toggle('active', hasActiveEffects);
+          }
+        }
       }
     });
     
@@ -842,6 +926,28 @@ export function setupEventHandlers(
           setTimeout(() => {
             if (effectElement.parentElement) {
               effectElement.parentElement.removeChild(effectElement);
+              
+              // Check if this was the last effect
+              if (container.querySelectorAll('.effect-item').length === 0) {
+                container.innerHTML = '<div class="no-effects-message">No effects added to this track yet.</div>';
+              }
+            }
+            
+            // Update the effects button on the track
+            const trackElement = document.querySelector(`[data-track-id="${track.id}"]`);
+            if (trackElement && audioEngine) {
+              const effectsButton = trackElement.querySelector('.effects-button');
+              if (effectsButton) {
+                // Get updated track data
+                const updatedTrack = audioEngine.trackService.getAllTracks().find(t => t.id === track.id);
+                if (updatedTrack) {
+                  // Check if any effects are active
+                  const hasActiveEffects = updatedTrack.effects.some(e => !e.bypass);
+                  effectsButton.classList.toggle('active', hasActiveEffects && updatedTrack.effects.length > 0);
+                } else {
+                  effectsButton.classList.remove('active');
+                }
+              }
             }
           }, 300);
         }, 10);
