@@ -7,6 +7,9 @@ import { createTrackService } from '../services/track-service';
 import { showLoadingIndicator, hideLoadingIndicator, showErrorNotification } from './components/loading';
 import { AudioEngine } from '../core/audio-engine';
 import { updateTrackWidth, centerViewOnTime } from '../utils/scroll-sync';
+import { Effect } from '../models/effect';
+import { createReverbEffect } from '../effects/reverb';
+import { createDelayEffect } from '../effects/delay';
 
 // Global variable to track the currently selected track
 let selectedTrackId: string | null = null;
@@ -393,6 +396,10 @@ export function setupEventHandlers(
           <input type="range" min="0" max="1" step="0.01" value="1" class="gain-slider" title="Volume">
           <span class="volume-display">100%</span>
         </div>
+        <div class="track-effects">
+          <div class="effects-title">Effects <button class="add-effect-btn" title="Add Effect">+</button></div>
+          <div class="effects-list"></div>
+        </div>
       </div>
       <div class="track-clips"></div>
     `;
@@ -580,6 +587,286 @@ export function setupEventHandlers(
     
     // Set up drag and drop for this track's clip area
     setupTrackDropZone(trackElement.querySelector('.track-clips'));
+    
+    // Set up effects panel
+    setupEffectsPanel(trackElement, track);
+  }
+  
+  // Function to set up the effects panel for a track
+  function setupEffectsPanel(trackElement: HTMLElement, track: AudioTrack): void {
+    const effectsList = trackElement.querySelector('.effects-list') as HTMLElement;
+    const addEffectBtn = trackElement.querySelector('.add-effect-btn') as HTMLElement;
+    
+    if (!effectsList || !addEffectBtn) {
+      console.warn('Effects panel elements not found');
+      return;
+    }
+    
+    // Add existing effects to the UI
+    track.effects.forEach(effect => {
+      addEffectToUI(effect, effectsList, track);
+    });
+    
+    // Set up add effect button
+    addEffectBtn.addEventListener('click', () => {
+      if (!track || !audioEngine) return;
+      
+      showEffectSelectionDialog(track.id);
+    });
+  }
+  
+  // Show dialog for selecting which effect to add
+  function showEffectSelectionDialog(trackId: string): void {
+    const dialog = document.createElement('div');
+    dialog.className = 'modal-dialog';
+    dialog.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Add Effect</h2>
+          <button class="close-button">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="effect-selection">
+            <div class="effect-option" data-effect="reverb">
+              <div class="effect-icon">🔊</div>
+              <div class="effect-info">
+                <h3>Reverb</h3>
+                <p>Add space and ambience to your audio</p>
+              </div>
+            </div>
+            <div class="effect-option" data-effect="delay">
+              <div class="effect-icon">🔄</div>
+              <div class="effect-info">
+                <h3>Delay</h3>
+                <p>Create echo and repeat effects</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // Show dialog
+    setTimeout(() => {
+      dialog.classList.add('visible');
+    }, 10);
+    
+    // Close dialog when X is clicked
+    const closeButton = dialog.querySelector('.close-button');
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        dialog.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(dialog);
+        }, 300);
+      });
+    }
+    
+    // Handle effect selection
+    const effectOptions = dialog.querySelectorAll('.effect-option');
+    effectOptions.forEach(option => {
+      option.addEventListener('click', () => {
+        const effectType = option.getAttribute('data-effect');
+        if (effectType && audioEngine) {
+          // Add the selected effect to the track
+          let effect: Effect | null = null;
+          
+          if (effectType === 'reverb') {
+            // Add reverb effect
+            effect = createReverbEffect(audioEngine.audioContext);
+          } else if (effectType === 'delay') {
+            // Add delay effect
+            effect = createDelayEffect(audioEngine.audioContext);
+          }
+          
+          if (effect) {
+            console.log(`Adding ${effectType} effect to track ${trackId}`);
+            audioEngine.trackService.addEffectToTrack(trackId, effect);
+            
+            // Find track and update UI
+            const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+            if (trackElement) {
+              const effectsList = trackElement.querySelector('.effects-list');
+              const track = audioEngine.trackService.getAllTracks().find(t => t.id === trackId);
+              
+              if (effectsList && track) {
+                addEffectToUI(effect, effectsList as HTMLElement, track);
+              }
+            }
+            
+            // Create notification
+            const notification = document.createElement('div');
+            notification.className = 'toast-notification';
+            notification.textContent = `Added ${effectType} effect`;
+            document.body.appendChild(notification);
+            
+            // Show and then hide notification
+            setTimeout(() => {
+              notification.classList.add('visible');
+              setTimeout(() => {
+                notification.classList.remove('visible');
+                setTimeout(() => {
+                  document.body.removeChild(notification);
+                }, 300);
+              }, 1500);
+            }, 10);
+          }
+        }
+        
+        // Close the dialog
+        dialog.classList.remove('visible');
+        setTimeout(() => {
+          document.body.removeChild(dialog);
+        }, 300);
+      });
+    });
+  }
+  
+  // Add effect to the UI
+  function addEffectToUI(effect: Effect, container: HTMLElement, track: AudioTrack): void {
+    // Create container for the effect
+    const effectElement = document.createElement('div');
+    effectElement.className = `effect-item ${effect.bypass ? 'effect-bypass' : ''}`;
+    effectElement.dataset.effectId = effect.id;
+    
+    // Create effect header with title and controls
+    const effectHeader = document.createElement('div');
+    effectHeader.className = 'effect-header';
+    
+    // Create effect title
+    const effectTitle = document.createElement('div');
+    effectTitle.className = 'effect-title';
+    effectTitle.textContent = effect.type.charAt(0).toUpperCase() + effect.type.slice(1);
+    
+    // Create effect controls
+    const effectControls = document.createElement('div');
+    effectControls.className = 'effect-controls';
+    
+    // Create bypass button
+    const bypassButton = document.createElement('button');
+    bypassButton.className = `effect-control-btn bypass-btn ${effect.bypass ? 'active' : ''}`;
+    bypassButton.title = effect.bypass ? 'Enable' : 'Bypass';
+    bypassButton.textContent = effect.bypass ? '⊘' : '⦿';
+    
+    // Create remove button
+    const removeButton = document.createElement('button');
+    removeButton.className = 'effect-control-btn remove-btn';
+    removeButton.title = 'Remove';
+    removeButton.textContent = '×';
+    
+    // Add controls to header
+    effectControls.appendChild(bypassButton);
+    effectControls.appendChild(removeButton);
+    effectHeader.appendChild(effectTitle);
+    effectHeader.appendChild(effectControls);
+    
+    // Create parameters container
+    const paramsContainer = document.createElement('div');
+    paramsContainer.className = 'effect-parameters';
+    
+    // Add parameters
+    effect.parameters.forEach(param => {
+      // Parameter name
+      const paramName = document.createElement('div');
+      paramName.className = 'param-name';
+      paramName.textContent = param.name;
+      
+      // Parameter slider
+      const paramSlider = document.createElement('input');
+      paramSlider.type = 'range';
+      paramSlider.className = 'param-slider';
+      paramSlider.min = param.min.toString();
+      paramSlider.max = param.max.toString();
+      paramSlider.step = param.step.toString();
+      paramSlider.value = param.value.toString();
+      
+      // Parameter value display
+      const paramValue = document.createElement('div');
+      paramValue.className = 'param-value';
+      paramValue.textContent = param.value.toFixed(2);
+      
+      // Add parameter elements to container
+      paramsContainer.appendChild(paramName);
+      paramsContainer.appendChild(paramSlider);
+      paramsContainer.appendChild(paramValue);
+      
+      // Add event listener for slider changes
+      paramSlider.addEventListener('input', () => {
+        const newValue = parseFloat(paramSlider.value);
+        paramValue.textContent = newValue.toFixed(2);
+        
+        // Update the parameter in the effect
+        if (audioEngine) {
+          audioEngine.trackService.updateEffectParameter(track.id, effect.id, param.name, newValue);
+        }
+      });
+    });
+    
+    // Add header and parameters to effect
+    effectElement.appendChild(effectHeader);
+    effectElement.appendChild(paramsContainer);
+    
+    // Add event listeners for controls
+    bypassButton.addEventListener('click', () => {
+      if (audioEngine) {
+        const isBypassed = audioEngine.trackService.toggleEffectBypass(track.id, effect.id);
+        
+        // Update UI
+        bypassButton.textContent = isBypassed ? '⊘' : '⦿';
+        bypassButton.title = isBypassed ? 'Enable' : 'Bypass';
+        effectElement.classList.toggle('effect-bypass', isBypassed);
+        bypassButton.classList.toggle('active', isBypassed);
+      }
+    });
+    
+    removeButton.addEventListener('click', () => {
+      if (audioEngine) {
+        // Remove effect from the track
+        audioEngine.trackService.removeEffectFromTrack(track.id, effect.id);
+        
+        // Remove from UI with animation
+        effectElement.style.height = effectElement.offsetHeight + 'px';
+        effectElement.classList.add('removing');
+        
+        // Set height to 0 to animate collapse
+        setTimeout(() => {
+          effectElement.style.height = '0';
+          effectElement.style.opacity = '0';
+          effectElement.style.padding = '0';
+          effectElement.style.margin = '0';
+          effectElement.style.overflow = 'hidden';
+          
+          // Remove element after animation completes
+          setTimeout(() => {
+            if (effectElement.parentElement) {
+              effectElement.parentElement.removeChild(effectElement);
+            }
+          }, 300);
+        }, 10);
+        
+        // Show notification
+        const notification = document.createElement('div');
+        notification.className = 'toast-notification';
+        notification.textContent = `Removed ${effect.type} effect`;
+        document.body.appendChild(notification);
+        
+        // Show and then hide notification
+        setTimeout(() => {
+          notification.classList.add('visible');
+          setTimeout(() => {
+            notification.classList.remove('visible');
+            setTimeout(() => {
+              document.body.removeChild(notification);
+            }, 300);
+          }, 1500);
+        }, 10);
+      }
+    });
+    
+    // Add effect to container
+    container.appendChild(effectElement);
   }
   
   // Global variables to track selection and clipboard

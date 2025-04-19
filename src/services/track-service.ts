@@ -11,6 +11,11 @@ export interface TrackService {
   moveClipToTrack(sourceTrackId: string, targetTrackId: string, clipId: string, newStartTime?: number): AudioClip | null;
   addEffectToTrack(trackId: string, effect: Effect): void;
   removeEffectFromTrack(trackId: string, effectId: string): void;
+  updateEffectParameter(trackId: string, effectId: string, paramName: string, value: number): void;
+  toggleEffectBypass(trackId: string, effectId: string): boolean;
+  rebuildEffectChain(trackId: string): void;
+  applyEffectParameters(effect: Effect): void;
+  getTrackEffects(trackId: string): Effect[];
   getTrackClips(trackId: string): AudioClip[];
   getAllTracks(): AudioTrack[];
   getTrackGainNode(trackId: string): GainNode | undefined;
@@ -25,7 +30,11 @@ export function createTrackService(
 ): TrackService {
   const tracks: Map<string, AudioTrack> = new Map();
   // Map to store audio nodes for each track
-  const trackNodes: Map<string, { gainNode: GainNode, source?: AudioBufferSourceNode }> = new Map();
+  const trackNodes: Map<string, { 
+    gainNode: GainNode, 
+    source?: AudioBufferSourceNode,
+    effectChain?: AudioNode[] 
+  }> = new Map();
   
   return {
     addTrack(trackId?: string): AudioTrack {
@@ -145,16 +154,380 @@ export function createTrackService(
     
     addEffectToTrack(trackId: string, effect: Effect): void {
       const track = tracks.get(trackId);
-      if (track) {
-        track.effects.push(effect);
+      const trackNode = trackNodes.get(trackId);
+      
+      if (!track || !trackNode) {
+        console.warn(`Cannot add effect: Track ${trackId} not found`);
+        return;
       }
+      
+      // Add to effects array in the track data
+      track.effects.push(effect);
+      
+      // Rebuild the effect chain
+      this.rebuildEffectChain(trackId);
+      
+      console.log(`Added ${effect.type} effect to track ${trackId}`);
+      
+      // Dispatch event for track changed
+      document.dispatchEvent(new CustomEvent('track:changed', {
+        detail: { type: 'effect-added', trackId, effectId: effect.id }
+      }));
     },
     
     removeEffectFromTrack(trackId: string, effectId: string): void {
       const track = tracks.get(trackId);
-      if (track) {
-        track.effects = track.effects.filter(effect => effect.id !== effectId);
+      
+      if (!track) {
+        console.warn(`Cannot remove effect: Track ${trackId} not found`);
+        return;
       }
+      
+      // Remove from the track's effects array
+      const oldEffectsLength = track.effects.length;
+      track.effects = track.effects.filter(effect => effect.id !== effectId);
+      
+      // Check if anything was actually removed
+      if (track.effects.length === oldEffectsLength) {
+        console.warn(`Effect ${effectId} not found in track ${trackId}`);
+        return;
+      }
+      
+      // Rebuild the effect chain
+      this.rebuildEffectChain(trackId);
+      
+      console.log(`Removed effect ${effectId} from track ${trackId}`);
+      
+      // Dispatch event for track changed
+      document.dispatchEvent(new CustomEvent('track:changed', {
+        detail: { type: 'effect-removed', trackId, effectId }
+      }));
+    },
+    
+    // Helper method to rebuild the audio effects chain for a track
+    rebuildEffectChain(trackId: string): void {
+      const track = tracks.get(trackId);
+      const trackNode = trackNodes.get(trackId);
+      
+      if (!track || !trackNode) {
+        console.warn(`Cannot rebuild effect chain: Track ${trackId} not found`);
+        return;
+      }
+      
+      // Disconnect existing effect chain if any
+      if (trackNode.effectChain && trackNode.effectChain.length > 0) {
+        console.log(`Disconnecting existing effect chain with ${trackNode.effectChain.length} effects`);
+        // Disconnect gain node from everything
+        trackNode.gainNode.disconnect();
+        
+        // Disconnect all effects in the chain
+        trackNode.effectChain.forEach(node => {
+          try {
+            // Use the custom disconnect method if available
+            if (typeof (node as any).disconnect === 'function') {
+              (node as any).disconnect();
+            } else {
+              // Default disconnect
+              node.disconnect();
+            }
+          } catch (err) {
+            console.warn(`Error disconnecting node:`, err);
+          }
+        });
+        
+        // Clear the effect chain
+        trackNode.effectChain = [];
+      } else {
+        // No effect chain yet, just disconnect gain node from master
+        trackNode.gainNode.disconnect();
+      }
+      
+      if (track.effects.length === 0) {
+        // No effects, connect gain directly to master
+        console.log(`No effects for track ${trackId}, connecting gain directly to master`);
+        trackNode.gainNode.connect(masterGainNode);
+        return;
+      }
+      
+      // Create a new effect chain
+      const effectNodes: AudioNode[] = [];
+      
+      // Process each effect and create the chain
+      track.effects.forEach((effect) => {
+        if (effect.bypass) {
+          console.log(`Effect ${effect.id} (${effect.type}) is bypassed, skipping`);
+          return;
+        }
+        
+        if (!effect.node) {
+          console.warn(`Effect ${effect.id} has no audio node, skipping`);
+          return;
+        }
+        
+        console.log(`Adding ${effect.type} effect to chain for track ${trackId}`);
+        effectNodes.push(effect.node);
+        
+        // Apply parameters to make sure they're current
+        this.applyEffectParameters(effect);
+      });
+      
+      // Store the effect chain
+      trackNode.effectChain = effectNodes;
+      
+      if (effectNodes.length === 0) {
+        // No active effects, connect gain directly to master
+        console.log(`No active effects for track ${trackId}, connecting gain directly to master`);
+        trackNode.gainNode.connect(masterGainNode);
+        return;
+      }
+      
+      // Connect the chain
+      // First connect gain node to first effect
+      console.log(`Connecting gain node to first effect in chain`);
+      trackNode.gainNode.connect(effectNodes[0]);
+      
+      // Connect effects in sequence
+      for (let i = 0; i < effectNodes.length - 1; i++) {
+        console.log(`Connecting effect ${i} to effect ${i + 1}`);
+        
+        try {
+          // Use custom connect method if available
+          if (typeof (effectNodes[i] as any).connect === 'function') {
+            (effectNodes[i] as any).connect(effectNodes[i + 1]);
+          } else {
+            // Default connect
+            effectNodes[i].connect(effectNodes[i + 1]);
+          }
+        } catch (err) {
+          console.error(`Error connecting effect ${i} to effect ${i + 1}:`, err);
+          // Fallback to direct connection
+          effectNodes[i].connect(effectNodes[i + 1]);
+        }
+      }
+      
+      // Connect last effect to master
+      const lastEffect = effectNodes[effectNodes.length - 1];
+      console.log(`Connecting last effect to master gain node`);
+      
+      try {
+        // Use custom connect method if available
+        if (typeof (lastEffect as any).connect === 'function') {
+          (lastEffect as any).connect(masterGainNode);
+        } else {
+          // Default connect
+          lastEffect.connect(masterGainNode);
+        }
+      } catch (err) {
+        console.error(`Error connecting last effect to master:`, err);
+        // Fallback to direct connection
+        lastEffect.connect(masterGainNode);
+      }
+      
+      console.log(`Rebuilt effect chain for track ${trackId} with ${effectNodes.length} active effects`);
+    },
+    
+    updateEffectParameter(trackId: string, effectId: string, paramName: string, value: number): void {
+      const track = tracks.get(trackId);
+      
+      if (!track) {
+        console.warn(`Cannot update effect: Track ${trackId} not found`);
+        return;
+      }
+      
+      // Find the effect
+      const effect = track.effects.find(e => e.id === effectId);
+      if (!effect) {
+        console.warn(`Effect ${effectId} not found in track ${trackId}`);
+        return;
+      }
+      
+      // Find the parameter
+      const parameter = effect.parameters.find(p => p.name === paramName);
+      if (!parameter) {
+        console.warn(`Parameter ${paramName} not found in effect ${effectId}`);
+        return;
+      }
+      
+      // Clamp the value between min and max
+      const clampedValue = Math.max(parameter.min, Math.min(parameter.max, value));
+      
+      // Update the parameter value
+      parameter.value = clampedValue;
+      
+      // Apply the parameter change to the audio node
+      this.applyEffectParameters(effect);
+      
+      // If the parameter change might affect the audio routing (like a wet/dry mix),
+      // we might need to rebuild the chain to make sure all connections are correct
+      if (paramName === 'Mix') {
+        console.log(`Mix parameter changed, rebuilding effect chain to ensure proper routing`);
+        this.rebuildEffectChain(trackId);
+      }
+      
+      console.log(`Updated ${effect.type} parameter ${paramName} to ${clampedValue} on track ${trackId}`);
+      
+      // Dispatch event for track changed
+      document.dispatchEvent(new CustomEvent('track:changed', {
+        detail: { 
+          type: 'effect-parameter-changed', 
+          trackId, 
+          effectId, 
+          paramName, 
+          value: clampedValue 
+        }
+      }));
+    },
+    
+    toggleEffectBypass(trackId: string, effectId: string): boolean {
+      const track = tracks.get(trackId);
+      
+      if (!track) {
+        console.warn(`Cannot toggle effect: Track ${trackId} not found`);
+        return false;
+      }
+      
+      // Find the effect
+      const effect = track.effects.find(e => e.id === effectId);
+      if (!effect) {
+        console.warn(`Effect ${effectId} not found in track ${trackId}`);
+        return false;
+      }
+      
+      // Toggle bypass state
+      effect.bypass = !effect.bypass;
+      
+      // Rebuild the effect chain
+      this.rebuildEffectChain(trackId);
+      
+      console.log(`${effect.bypass ? 'Bypassed' : 'Enabled'} ${effect.type} effect on track ${trackId}`);
+      
+      // Dispatch event for track changed
+      document.dispatchEvent(new CustomEvent('track:changed', {
+        detail: { 
+          type: 'effect-bypass-toggled', 
+          trackId, 
+          effectId, 
+          bypassed: effect.bypass 
+        }
+      }));
+      
+      return effect.bypass;
+    },
+    
+    // Apply parameter changes to the actual effect nodes
+    applyEffectParameters(effect: Effect): void {
+      if (!effect.node) {
+        console.warn(`Effect ${effect.id} has no audio node to apply parameters to`);
+        return;
+      }
+      
+      try {
+        // Apply parameters based on effect type
+        switch (effect.type) {
+          case 'reverb': {
+            // The actual node should be the inputNode from our custom effect
+            const inputNode = effect.node;
+            
+            // Since we now attach methods directly to the input node, we can use them directly
+            // This simplifies our parameter application logic
+            
+            // Get parameters
+            const mixParam = effect.parameters.find(p => p.name === 'Mix');
+            const timeParam = effect.parameters.find(p => p.name === 'Time');
+            
+            // First try using direct method access on the input node
+            if (mixParam && typeof (inputNode as any).setMix === 'function') {
+              console.log(`Updating reverb mix to ${mixParam.value}`);
+              (inputNode as any).setMix(mixParam.value);
+            } 
+            // If that fails, try accessing via the effectObj
+            else if (mixParam && (inputNode as any).effectObj && typeof (inputNode as any).effectObj.setMix === 'function') {
+              console.log(`Updating reverb mix via effectObj to ${mixParam.value}`);
+              (inputNode as any).effectObj.setMix(mixParam.value);
+            } 
+            else {
+              console.warn('Could not update reverb mix - method not available');
+            }
+            
+            // Apply time parameter if it exists and we have the method
+            if (timeParam && typeof (inputNode as any).setReverbTime === 'function') {
+              console.log(`Updating reverb time to ${timeParam.value}`);
+              (inputNode as any).setReverbTime(timeParam.value);
+            }
+            // If that fails, try accessing via the effectObj
+            else if (timeParam && (inputNode as any).effectObj && typeof (inputNode as any).effectObj.setReverbTime === 'function') {
+              console.log(`Updating reverb time via effectObj to ${timeParam.value}`);
+              (inputNode as any).effectObj.setReverbTime(timeParam.value);
+            }
+            else {
+              console.warn('Could not update reverb time - method not available');
+            }
+            
+            break;
+          }
+          
+          case 'delay': {
+            const inputNode = effect.node;
+            
+            // Find parameters
+            const timeParam = effect.parameters.find(p => p.name === 'Time');
+            const feedbackParam = effect.parameters.find(p => p.name === 'Feedback');
+            const mixParam = effect.parameters.find(p => p.name === 'Mix');
+            
+            // First try direct method access on the input node
+            if (timeParam && typeof (inputNode as any).setDelayTime === 'function') {
+              console.log(`Updating delay time to ${timeParam.value}`);
+              (inputNode as any).setDelayTime(timeParam.value);
+            } 
+            // If that fails, try accessing via the effectObj
+            else if (timeParam && (inputNode as any).effectObj && typeof (inputNode as any).effectObj.setDelayTime === 'function') {
+              console.log(`Updating delay time via effectObj to ${timeParam.value}`);
+              (inputNode as any).effectObj.setDelayTime(timeParam.value);
+            }
+            else {
+              console.warn('Could not update delay time - method not available');
+            }
+            
+            if (feedbackParam && typeof (inputNode as any).setFeedback === 'function') {
+              console.log(`Updating delay feedback to ${feedbackParam.value}`);
+              (inputNode as any).setFeedback(feedbackParam.value);
+            }
+            // If that fails, try accessing via the effectObj
+            else if (feedbackParam && (inputNode as any).effectObj && typeof (inputNode as any).effectObj.setFeedback === 'function') {
+              console.log(`Updating delay feedback via effectObj to ${feedbackParam.value}`);
+              (inputNode as any).effectObj.setFeedback(feedbackParam.value);
+            }
+            else {
+              console.warn('Could not update delay feedback - method not available');
+            }
+            
+            if (mixParam && typeof (inputNode as any).setMix === 'function') {
+              console.log(`Updating delay mix to ${mixParam.value}`);
+              (inputNode as any).setMix(mixParam.value);
+            }
+            // If that fails, try accessing via the effectObj
+            else if (mixParam && (inputNode as any).effectObj && typeof (inputNode as any).effectObj.setMix === 'function') {
+              console.log(`Updating delay mix via effectObj to ${mixParam.value}`);
+              (inputNode as any).effectObj.setMix(mixParam.value);
+            }
+            else {
+              console.warn('Could not update delay mix - method not available');
+            }
+            
+            break;
+          }
+          
+          default:
+            console.warn(`Unknown effect type: ${effect.type}`);
+        }
+      } catch (err) {
+        console.error(`Error applying effect parameters for ${effect.type} effect:`, err);
+      }
+    },
+    
+    getTrackEffects(trackId: string): Effect[] {
+      const track = tracks.get(trackId);
+      return track ? [...track.effects] : [];
     },
     
     getTrackClips(trackId: string): AudioClip[] {

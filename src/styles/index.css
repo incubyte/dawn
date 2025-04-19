@@ -13,6 +13,7 @@
   --border-color: #444444;
   --button-hover: #375a7f;
   --track-bg: #252525;
+  --track-bg-dark: #1a1a1a;
   --track-header-bg: #323232;
   --timeline-bg: #242424;
   --timeline-marker: #555555;
@@ -562,6 +563,182 @@ body {
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
+}
+
+/* Track effects section */
+.track-effects {
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+}
+
+.effects-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+}
+
+.add-effect-btn {
+  background: var(--secondary-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  font-size: 12px;
+  border-radius: 3px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-effect-btn:hover {
+  background: var(--button-hover);
+}
+
+.effects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.effect-item {
+  display: flex;
+  flex-direction: column;
+  background: var(--track-bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 5px;
+  font-size: 12px;
+}
+
+.effect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.effect-title {
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+}
+
+.effect-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.effect-control-btn {
+  width: 20px;
+  height: 20px;
+  background: var(--secondary-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.2s ease;
+}
+
+.effect-control-btn:hover {
+  background: var(--button-hover);
+}
+
+.effect-control-btn.active {
+  background-color: var(--primary-color);
+}
+
+.effect-bypass {
+  opacity: 0.5;
+}
+
+.effect-parameters {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.param-name {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.param-slider {
+  height: 6px;
+  background: var(--track-bg);
+  border-radius: 3px;
+}
+
+.param-value {
+  width: 30px;
+  text-align: right;
+  font-size: 11px;
+}
+
+/* Effect selection dialog */
+.effect-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.effect-option {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  background-color: var(--secondary-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.effect-option:hover {
+  background-color: var(--button-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.effect-icon {
+  font-size: 24px;
+  margin-right: 15px;
+  width: 40px;
+  text-align: center;
+}
+
+.effect-info h3 {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+}
+
+.effect-info p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Animation for removing effects */
+.effect-item.removing {
+  transition: all 0.3s ease-out;
+}
+
+/* Hover effects for controls */
+.effect-control-btn.remove-btn:hover {
+  background-color: rgba(231, 76, 60, 0.3);
+  color: #e74c3c;
 }
 
 /* Audio Clip */

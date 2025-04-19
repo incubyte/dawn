@@ -218,9 +218,18 @@ export function setupAudioEngine(): AudioEngine {
               audioContext.resume().catch(err => console.error('Failed to resume AudioContext:', err));
             }
             
-            // Connect to the track's gain node
+            // Connect to the track's gain node or effect chain
+            // If the track has active effects, the trackGainNode will be connected
+            // to the first effect node in rebuildEffectChain() in the TrackService
             source.connect(trackGainNode);
-            console.log(`Clip ${clip.id} source connected to gain node`);
+            console.log(`Clip ${clip.id} source connected to gain node (which may be connected to effects chain)`);
+            
+            // Make sure the effect chain is properly rebuilt before playback
+            // This ensures all effects are connected correctly
+            if (track.effects.length > 0) {
+              console.log(`Track ${track.id} has ${track.effects.length} effects, rebuilding effect chain`);
+              trackService.rebuildEffectChain(track.id);
+            }
             
             // Calculate when this clip should start in context time
             let startDelay = clipStartTime - playbackOffset;
