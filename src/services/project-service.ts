@@ -1,5 +1,5 @@
 import { AudioClip } from '../models/audio-clip';
-import { Effect, EffectType } from '../models/effect';
+import { Effect } from '../models/effect';
 import { TrackService } from './track-service';
 import { createReverbEffect } from '../effects/reverb';
 import { createDelayEffect } from '../effects/delay';
