@@ -304,13 +304,10 @@ function renderWaveformAsync(
   offset?: number, 
   duration?: number
 ): void {
-  // Use a smaller height for the waveform canvas to improve performance
   const height = 40;
   
-  // Use setTimeout to avoid blocking the UI thread
   setTimeout(() => {
     try {
-      // Convert time offsets to sample offsets if provided
       let offsetSamples: number | undefined;
       let durationSamples: number | undefined;
       
@@ -330,7 +327,6 @@ function renderWaveformAsync(
   }, 100);
 }
 
-// Helper function to trim a clip visually and adjust its data
 export function trimClip(clipElement: HTMLElement, pixelsPerSecond: number, fromStart: boolean, offsetPixels: number): void {
   const width = parseInt(clipElement.style.width, 10);
   const left = parseInt(clipElement.style.left, 10);

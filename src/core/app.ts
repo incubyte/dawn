@@ -8,45 +8,107 @@ import { setupAudioDebug } from '../utils/audio-debug';
 import { setupScrollSync, updateTrackWidth } from '../utils/scroll-sync';
 
 import { createWelcomeScreen, StorageProvider } from '../ui/components/welcome-screen';
+import { assertNotNullOrUndefined } from '../utils/assert';
 
 export function initializeApp(): void {
-  // Prepare the app container
-  const appContainer = document.getElementById('app');
-  if (!appContainer) {
-    console.error('App container not found');
-    return;
-  }
-  
-  // Create and show the welcome screen
-  const welcomeScreen = createWelcomeScreen(
-    (action: 'new' | 'load', storageProvider: StorageProvider) => {
-      handleWelcomeScreenAction(action, storageProvider, appContainer);
-    }
-  );
-  
-  // Clear the app container and add the welcome screen
-  appContainer.innerHTML = '';
-  appContainer.appendChild(welcomeScreen);
-  
-  console.log('Welcome screen initialized');
+    const appContainer = document.getElementById('app');
+    assertNotNullOrUndefined(appContainer, "[ERROR] Root element not found");
+
+    const welcomeScreen = createWelcomeScreen(
+        (action: 'new' | 'load', storageProvider: StorageProvider) => {
+            handleWelcomeScreenAction(action, storageProvider, appContainer);
+        }
+    );
+    appContainer.innerHTML = '';
+    appContainer.appendChild(welcomeScreen);
+    console.log('Welcome screen initialized');
 }
 
 function handleWelcomeScreenAction(
-  action: 'new' | 'load', 
-  storageProvider: StorageProvider, 
-  appContainer: HTMLElement
+    action: 'new' | 'load',
+    storageProvider: StorageProvider,
+    appContainer: HTMLElement
 ): void {
-  console.log(`Welcome screen action: ${action}, storage: ${storageProvider}`);
-  
-  // Remove the welcome screen
-  appContainer.innerHTML = '';
-  
-  // Create the main DAW container
-  const dawContainer = document.createElement('div');
-  dawContainer.className = 'daw-container';
-  
-  // Create the basic structure
-  dawContainer.innerHTML = `
+
+    // TODO: Handle storageProvider
+    console.log(storageProvider);
+    // CLN: CleanUP
+    console.log(appContainer);
+    initializeDAW(action);
+}
+
+function initializeDAW(action: 'new' | 'load'): void {
+    const audioEngine: AudioEngine = AudioEngineImpl.instance();
+
+    setupUI(audioEngine);
+
+    // Create transport controls with the audio engine
+    createTransportControls(audioEngine);
+
+    // Set up timeline with seek capability
+    createTimeline({
+        pixelsPerSecond: 10,
+        totalDuration: 300,
+        majorMarkerInterval: 30,
+        onSeek: (time) => {
+            audioEngine.seekTo(time);
+            updateTimelineCursor(time, 10);
+        }
+    });
+
+    // Set up event handlers with the audio engine
+    setupEventHandlers(audioEngine.audioContext, audioEngine.masterGainNode, audioEngine);
+
+    // Start the animation frame for the timeline cursor
+    animateTimelineCursor(audioEngine);
+
+    // Listen for timeline zoom changes
+    document.addEventListener('timeline:zoom', (e: Event) => {
+        const customEvent = e as CustomEvent;
+        const { pixelsPerSecond } = customEvent.detail;
+
+        // Update any clip positions with the new pixels per second
+        updateClipPositions(pixelsPerSecond);
+    });
+
+    // Add a global click handler to initialize audio context
+    document.addEventListener('click', () => {
+        // Modern browsers require user interaction to start AudioContext
+        if (audioEngine.audioContext.state === 'suspended') {
+            audioEngine.audioContext.resume().then(() => {
+                console.log('AudioContext started from user interaction');
+            });
+        }
+    }, { once: true });
+
+    // Set up audio debugging tools
+    setupAudioDebug(audioEngine);
+
+    // Set up synchronized scrolling between timeline and tracks
+    setupScrollSync();
+
+    // Initialize track width
+    updateTrackWidth();
+
+    // If the action is 'load', automatically open the load dialog
+    if (action === 'load') {
+        setTimeout(() => {
+            // Local storage loading - trigger the load button click
+            const loadButton = document.getElementById('load-button');
+            if (loadButton) {
+                loadButton.click();
+            }
+        }, 500);
+    }
+
+    // Expose the audio engine globally for debugging
+    (window as any).audioEngine = audioEngine;
+
+    console.log('Browser DAW initialized');
+}
+
+function getDawContainerHTML(): string {
+    return `
     <div class="daw-header">
       <div class="header-left">
         <img src="/dawn_logo.png" alt="DAWN DAW" class="dawn-logo">
@@ -74,125 +136,47 @@ function handleWelcomeScreenAction(
       </div>
     </div>
   `;
-  
-  // Add the DAW container to the app
-  appContainer.appendChild(dawContainer);
-  
-  // Initialize the DAW components
-  initializeDAW(action);
-}
-
-function initializeDAW(action: 'new' | 'load'): void {
-  // Initialize audio engine first
-  const audioEngine: AudioEngine = AudioEngineImpl.instance();
-  
-  // Set up UI with audio engine reference
-  setupUI(audioEngine);
-  
-  // Create transport controls with the audio engine
-  createTransportControls(audioEngine);
-  
-  // Set up timeline with seek capability
-  createTimeline({
-    pixelsPerSecond: 10,
-    totalDuration: 300,
-    majorMarkerInterval: 30,
-    onSeek: (time) => {
-      audioEngine.seekTo(time);
-      updateTimelineCursor(time, 10);
-    }
-  });
-  
-  // Set up event handlers with the audio engine
-  setupEventHandlers(audioEngine.audioContext, audioEngine.masterGainNode, audioEngine);
-  
-  // Start the animation frame for the timeline cursor
-  animateTimelineCursor(audioEngine);
-  
-  // Listen for timeline zoom changes
-  document.addEventListener('timeline:zoom', (e: Event) => {
-    const customEvent = e as CustomEvent;
-    const { pixelsPerSecond } = customEvent.detail;
-    
-    // Update any clip positions with the new pixels per second
-    updateClipPositions(pixelsPerSecond);
-  });
-  
-  // Add a global click handler to initialize audio context
-  document.addEventListener('click', () => {
-    // Modern browsers require user interaction to start AudioContext
-    if (audioEngine.audioContext.state === 'suspended') {
-      audioEngine.audioContext.resume().then(() => {
-        console.log('AudioContext started from user interaction');
-      });
-    }
-  }, { once: true });
-  
-  // Set up audio debugging tools
-  setupAudioDebug(audioEngine);
-  
-  // Set up synchronized scrolling between timeline and tracks
-  setupScrollSync();
-  
-  // Initialize track width
-  updateTrackWidth();
-  
-  // If the action is 'load', automatically open the load dialog
-  if (action === 'load') {
-    setTimeout(() => {
-      // Local storage loading - trigger the load button click
-      const loadButton = document.getElementById('load-button');
-      if (loadButton) {
-        loadButton.click();
-      }
-    }, 500);
-  }
-  
-  // Expose the audio engine globally for debugging
-  (window as any).audioEngine = audioEngine;
-  
-  console.log('Browser DAW initialized');
 }
 
 function animateTimelineCursor(audioEngine: AudioEngine): void {
-  // Current pixels per second (default)
-  let pixelsPerSecond = 10;
-  
-  // Listen for zoom changes
-  document.addEventListener('timeline:zoom', (e: Event) => {
-    const customEvent = e as CustomEvent;
-    pixelsPerSecond = customEvent.detail.pixelsPerSecond;
-  });
-  
-  // Animation function
-  function animate() {
-    // Update the cursor position based on current playback time
-    updateTimelineCursor(audioEngine.currentTime, pixelsPerSecond);
-    
-    // Update the time display
-    const timeDisplay = document.getElementById('current-time');
-    if (timeDisplay) {
-      const formattedTime = formatTime(audioEngine.currentTime);
-      timeDisplay.textContent = formattedTime;
+    // Current pixels per second (default)
+    let pixelsPerSecond = 10;
+
+    // Listen for zoom changes
+    document.addEventListener('timeline:zoom', (e: Event) => {
+        const customEvent = e as CustomEvent;
+        pixelsPerSecond = customEvent.detail.pixelsPerSecond;
+    });
+
+    // Animation function
+    function animate() {
+        // Update the cursor position based on current playback time
+        updateTimelineCursor(audioEngine.currentTime, pixelsPerSecond);
+
+        // Update the time display
+        const timeDisplay = document.getElementById('current-time');
+        if (timeDisplay) {
+            const formattedTime = formatTime(audioEngine.currentTime);
+            timeDisplay.textContent = formattedTime;
+        }
+
+        requestAnimationFrame(animate);
     }
-    
-    requestAnimationFrame(animate);
-  }
-  
-  // Start animation loop
-  animate();
+
+    // Start animation loop
+    animate();
 }
 
 function updateClipPositions(pixelsPerSecond: number): void {
-  // Update all clip positions based on the new zoom level
-  const clips = document.querySelectorAll('.audio-clip');
-  
-  clips.forEach(clip => {
-    const clipElement = clip as HTMLElement;
-    const startTime = parseFloat(clipElement.dataset.startTime || '0');
-    const duration = parseFloat(clipElement.dataset.duration || '0');
-    
-    clipElement.style.left = `${startTime * pixelsPerSecond}px`;
-    clipElement.style.width = `${duration * pixelsPerSecond}px`;
-  });
+    // Update all clip positions based on the new zoom level
+    const clips = document.querySelectorAll('.audio-clip');
+
+    clips.forEach(clip => {
+        const clipElement = clip as HTMLElement;
+        const startTime = parseFloat(clipElement.dataset.startTime || '0');
+        const duration = parseFloat(clipElement.dataset.duration || '0');
+
+        clipElement.style.left = `${startTime * pixelsPerSecond}px`;
+        clipElement.style.width = `${duration * pixelsPerSecond}px`;
+    });
 }
