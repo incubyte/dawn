@@ -1,46 +1,73 @@
-// No imports needed
-
-// Define storage provider types
 export type StorageProvider = 'local' | null;
 
-// Interface for storage option
 interface StorageOption {
-  id: StorageProvider;
-  name: string;
-  description: string;
-  icon: string;
-  enabled: boolean;
-}
-// Interface to store app settings
-export interface AppSettings {
-  storageProvider: StorageProvider;
+    id: StorageProvider;
+    name: string;
+    description: string;
+    icon: string;
+    enabled: boolean;
 }
 
-// Global settings to persist through the session
+export interface AppSettings {
+    storageProvider: StorageProvider;
+}
+
 export const appSettings: AppSettings = {
-  storageProvider: null
+    storageProvider: null
 };
 
-// Function to create the welcome screen
 export function createWelcomeScreen(
-  onComplete: (action: 'new' | 'load', storageProvider: StorageProvider) => void
+    onComplete: (action: 'new' | 'load', storageProvider: StorageProvider) => void
 ): HTMLElement {
-  const welcomeContainer = document.createElement('div');
-  welcomeContainer.className = 'welcome-screen';
-  
-  // Storage options
-  const storageOptions: StorageOption[] = [
-    {
-      id: 'local',
-      name: 'Local Storage',
-      description: 'Save projects to your device',
-      icon: '💾',
-      enabled: true
+    const welcomeContainer = document.createElement('div');
+    welcomeContainer.className = 'welcome-screen';
+
+    const storageOptions: StorageOption[] = [
+        {
+            id: 'local',
+            name: 'Local Storage',
+            description: 'Save projects to your device',
+            icon: '💾',
+            enabled: true
+        }
+    ];
+
+    welcomeContainer.innerHTML = getWelcomeScreenInnerHTML(storageOptions);
+    setTimeout(() => {
+        setStorageOption(welcomeContainer);
+        addEventListeners(welcomeContainer, onComplete);
+    }, 0);
+
+    return welcomeContainer;
+}
+
+function setStorageOption(welcomeContainer: HTMLElement) {
+    const localStorageRadio = welcomeContainer.querySelector('#storage-local') as HTMLInputElement;
+    if (localStorageRadio) {
+        localStorageRadio.checked = true;
     }
-  ];
-  
-  // Create welcome screen content
-  welcomeContainer.innerHTML = `
+}
+
+function addEventListeners(welcomeContainer: HTMLElement, onComplete: Function) {
+    const newProjectBtn = welcomeContainer.querySelector('#new-project-btn');
+    if (newProjectBtn) {
+        newProjectBtn.addEventListener('click', () => {
+            appSettings.storageProvider = 'local';
+            onComplete('new', 'local');
+        });
+    }
+    const loadProjectBtn = welcomeContainer.querySelector('#load-project-btn');
+    if (loadProjectBtn) {
+        loadProjectBtn.addEventListener('click', () => {
+            // Since we only have local storage now, just set it directly
+            appSettings.storageProvider = 'local';
+            onComplete('load', 'local');
+        });
+    }
+}
+
+function getWelcomeScreenInnerHTML(storageOptions: StorageOption[]): string {
+    return `
     <div class="welcome-content">
       <div class="welcome-header">
         <img src="/dawn_logo.png" alt="DAWN DAW" class="welcome-logo">
@@ -85,86 +112,5 @@ export function createWelcomeScreen(
       </div>
     </div>
   `;
-  
-  // Add event listeners after attaching to DOM
-  setTimeout(() => {
-    // New project button
-    const newProjectBtn = welcomeContainer.querySelector('#new-project-btn');
-    if (newProjectBtn) {
-      newProjectBtn.addEventListener('click', () => {
-        // Since we only have local storage now, just set it directly
-        appSettings.storageProvider = 'local';
-        onComplete('new', 'local');
-      });
-    }
-    
-    // Load project button
-    const loadProjectBtn = welcomeContainer.querySelector('#load-project-btn');
-    if (loadProjectBtn) {
-      loadProjectBtn.addEventListener('click', () => {
-        // Since we only have local storage now, just set it directly
-        appSettings.storageProvider = 'local';
-        onComplete('load', 'local');
-      });
-    }
-    
-    // Since we've simplified to only local storage, we don't need complex event handlers
-    // Default to local storage selected
-    const localStorageRadio = welcomeContainer.querySelector('#storage-local') as HTMLInputElement;
-    if (localStorageRadio) {
-      localStorageRadio.checked = true;
-    }
-  }, 0);
-  
-  return welcomeContainer;
-}
 
-// Helper function to show an error message (kept for potential future use)
-/* function showError(message: string): void {
-  console.error('Welcome screen error:', message);
-  
-  // Remove any existing error messages
-  const existingErrors = document.querySelectorAll('.welcome-error');
-  existingErrors.forEach(el => {
-    document.body.removeChild(el);
-  });
-  
-  // Create the error element
-  const errorElement = document.createElement('div');
-  errorElement.className = 'welcome-error';
-  errorElement.innerHTML = `
-    <div class="error-content">
-      <span class="error-icon">⚠️</span>
-      <span class="error-message">${message}</span>
-      <button class="error-close">×</button>
-    </div>
-  `;
-  
-  document.body.appendChild(errorElement);
-  
-  // Add close button handler
-  const closeButton = errorElement.querySelector('.error-close');
-  if (closeButton) {
-    closeButton.addEventListener('click', () => {
-      errorElement.classList.remove('visible');
-      setTimeout(() => {
-        document.body.removeChild(errorElement);
-      }, 300);
-    });
-  }
-  
-  // Show the error
-  setTimeout(() => {
-    errorElement.classList.add('visible');
-    
-    // Standard delay for errors (3 seconds)
-    setTimeout(() => {
-      errorElement.classList.remove('visible');
-      setTimeout(() => {
-        if (document.body.contains(errorElement)) {
-          document.body.removeChild(errorElement);
-        }
-      }, 300);
-    }, 3000);
-  }, 10);
-} */
+}
