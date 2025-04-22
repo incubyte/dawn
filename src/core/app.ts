@@ -1,5 +1,5 @@
 import { setupUI } from '../ui/ui';
-import { setupAudioEngine, AudioEngine } from './audio-engine';
+import { AudioEngine, AudioEngineImpl } from './audio-engine';
 import { createTransportControls } from '../ui/components/transport';
 import { createTimeline, updateTimelineCursor } from '../ui/components/timeline';
 import { setupEventHandlers } from '../ui/events';
@@ -84,7 +84,7 @@ function handleWelcomeScreenAction(
 
 function initializeDAW(action: 'new' | 'load'): void {
   // Initialize audio engine first
-  const audioEngine = setupAudioEngine();
+  const audioEngine: AudioEngine = AudioEngineImpl.instance();
   
   // Set up UI with audio engine reference
   setupUI(audioEngine);
