@@ -1,6 +1,6 @@
 import { AudioFileService, createAudioFileService } from '../services/audio-file-service';
 import { createTrackService, TrackService } from '../services/track-service';
-import { createProjectService, ProjectService } from '../services/project-service';
+import { createProjectService, ProjectService, ProjectServiceImpl } from '../services/project-service';
 import { AudioTrack } from '../models/audio-track';
 import { assert, assertNotNullOrUndefined } from '../utils/assert';
 import { AudioClip } from '../models/audio-clip';
@@ -39,7 +39,7 @@ export class AudioEngineImpl implements AudioEngine {
         this.masterGainNode = this.audioContext.createGain();
         this.masterGainNode.connect(this.audioContext.destination);
         this.trackService = createTrackService(this.audioContext, this.masterGainNode);
-        this.projectService = createProjectService(this.audioContext, this.trackService);
+        this.projectService = new ProjectServiceImpl(this.audioContext, this.trackService);
         this.audioFileService = createAudioFileService(this.audioContext);
         this.isPlaying = false;
     }
